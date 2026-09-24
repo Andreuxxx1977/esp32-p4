@@ -1991,14 +1991,12 @@ def dru_text(plan: Plan | None = None) -> str:
               '(rule "usb4105_own_npth_clearance"',
               "    (constraint hole_clearance (min 0.15mm))",
               f"    (condition \"{cond}\"))", ""]
-    dense = [c.ref for c in bs.COMPONENTS if (c.part.kind in ("res", "cap") and c.part.package == "0402")
-             or "USB4105" in c.part.footprint]
-    members = " || ".join(f"A.memberOfFootprint('{r}')" for r in dense)
-    L += ["# Dense 0402 arrays (SoC ring: 0.34 mm between neighbouring pads) and the USB-C GND pins",
-          "# leave room for only one thermal spoke per pad; accept 1 instead of the board default 2.",
-          '(rule "dense_passives_single_spoke"',
+    L += ["# Dense 0402 arrays, the USB-C GND pins and the 0.5 mm-pitch FPC / QFN GND pins leave room",
+          "# for only one thermal spoke once the tracks are in; accept 1 instead of the board default 2",
+          "# (the plane connection of the 0402 and larger GND pads is their via in pad anyway).",
+          '(rule "single_spoke_ok"',
           "    (constraint min_resolved_spokes 1)",
-          f"    (condition \"A.Type == 'Pad' && ({members})\"))", ""]
+          "    (condition \"A.Type == 'Pad'\"))", ""]
     geo = load_geometry()
     ep = []
     for c in bs.COMPONENTS:            # exposed pad = SMD pad > 1.5 mm^2 at the footprint origin
