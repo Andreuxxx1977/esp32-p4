@@ -49,22 +49,30 @@ files, the ESP32-P4 hardware design guidelines and Espressif's KiCad library.
 
 See `docs/TASK1_pinout.md` for the full GPIO map and the zero-conflict proof.
 
-## License
+## License: free to use, just credit the original project
 
-Copyright (c) 2026 Andreuxxx1977.
+Copyright (c) 2026 Andreuxxx1977. Licensed under the **CERN Open Hardware Licence v2 - Permissive**
+(SPDX: `CERN-OHL-P-2.0`). The full text is in [`LICENSE`](LICENSE).
 
-This source describes Open Hardware and is licensed under the CERN-OHL-S v2 (SPDX: `CERN-OHL-S-2.0`).
-The licence covers the design data, the scripts that generate the netlist, placement, BOM and docs, and
-their outputs. The full text is in [`LICENSE`](LICENSE).
+In plain words: **anyone is free to use, copy, modify, fabricate, sell and build on this design,
+commercially or not.** The only thing asked in return is that you **credit this project as the
+original**, for example with a link in your README, documentation or product page:
 
-You may redistribute and modify this source and make products using it under the terms of the
-CERN-OHL-S v2 (https://ohwr.org/cern_ohl_s_v2.txt). This source is distributed WITHOUT ANY EXPRESS OR
-IMPLIED WARRANTY, INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY AND FITNESS FOR A PARTICULAR
-PURPOSE. Please see the CERN-OHL-S v2 for applicable conditions.
+> Based on the ESP32-P4 Extreme Performance board by Andreuxxx1977 -
+> https://github.com/Andreuxxx1977/esp32-p4
 
-Source location: https://github.com/Andreuxxx1977/esp32-p4
+You don't have to publish your own changes, and you don't have to use the same licence for your
+derivative. That attribution line is the licence's "Notice", so keep it (CERN-OHL-P v2 section 3.2).
+If you modify the design, add a short note saying so (section 3.3).
 
-As per CERN-OHL-S v2 section 4, should You produce hardware based on this source, You must where
-practicable maintain the Source Location visible on the external case of the product or other products
-you make using this source. The placement script also prints the source location and licence on the
-PCB silkscreen.
+Why so permissive? This design was produced largely with an AI assistant (Claude Code) driving the
+research, the data model and the generated files. There's little personal merit to protect, so the goal
+is simply that it's useful to as many people as possible.
+
+**Libre de usar:** cualquiera puede usar, modificar, fabricar y vender este diseño. Lo único que se pide
+es mencionar que el proyecto original es https://github.com/Andreuxxx1977/esp32-p4.
+
+This source is distributed WITHOUT ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING OF MERCHANTABILITY,
+SATISFACTORY QUALITY AND FITNESS FOR A PARTICULAR PURPOSE. Please see the CERN-OHL-P v2 for applicable
+conditions. The board has not been fabricated or bench-tested yet. Treat it as a reviewed starting point
+and check it against the datasheets before ordering (see `docs/component_verification.md`).
