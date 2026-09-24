@@ -242,6 +242,8 @@ IOMUX_OPTIONS: dict[str, tuple[int, ...]] = {
     "SD0_D4": (45,), "SD0_D5": (46,), "SD0_D6": (47,), "SD0_D7": (48,),
     # UART0 (ROM download / console) -- uart_pins.h
     "U0TXD": (37,), "U0RXD": (38,),
+    # LP UART (schematic checklist: LP UART TXD = LP GPIO14, RXD = LP GPIO15)
+    "LP_U0TXD": (14,), "LP_U0RXD": (15,),
     # USB Serial/JTAG full-speed PHY (default pads; roles can be swapped)
     "USJ_DM": (24,), "USJ_DP": (25,),
     # USB 1.1 FS OTG default pads

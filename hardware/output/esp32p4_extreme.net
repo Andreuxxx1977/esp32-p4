@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "esp32p4_extreme_netlist.py")
-    (date "09/24/2026 11:32 AM")
+    (date "09/24/2026 11:52 AM")
     (tool "SKiDL (2.3.0)")
     (sheet
       (number 1)
@@ -1639,7 +1639,7 @@
         (field
           (name "Group") "3V3 buck")
         (field
-          (name "Note") "Bulk at the SoC power entry, just outside the keep-out")
+          (name "Note") "Bulk at the SoC power entry, just outside the keep-out, clear of H1")
         (field
           (name "Description") "MLCC 47uF 6.3V X5R")
         (field
@@ -1671,7 +1671,7 @@
         (field
           (name "Group") "3V3 buck")
         (field
-          (name "Note") "Bulk at the SoC power entry, just outside the keep-out")
+          (name "Note") "Bulk at the SoC power entry, just outside the keep-out, clear of H4")
         (field
           (name "Description") "MLCC 47uF 6.3V X5R")
         (field
@@ -2635,6 +2635,70 @@
       (component_classes)
       (tstamps "4f1d244f-aaea-5a68-9eec-3c45f2851588"))
     (comp
+      (ref "C85")
+      (value "10pF")
+      (description "MLCC 10pF 50V C0G")
+      (footprint "Capacitor_SMD:C_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "CL05C100CB5NNNC")
+        (field
+          (name "Manufacturer") "Samsung Electro-Mechanics")
+        (field
+          (name "DNP") "DNP")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Note") "Optional CLK edge filter")
+        (field
+          (name "Description") "MLCC 10pF 50V C0G")
+        (field
+          (name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "C85"))
+      (libsource
+        (lib "NO_LIB")
+        (part "C_10pF_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "64fe6c7c-b1df-5cbd-99c6-35e9b3fbcb29")
+      (property
+        (name "dnp")))
+    (comp
+      (ref "C86")
+      (value "100nF")
+      (description "MLCC 100nF 16V X7R")
+      (footprint "Capacitor_SMD:C_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "CL05B104KO5NNNC")
+        (field
+          (name "Manufacturer") "Samsung Electro-Mechanics")
+        (field
+          (name "LCSC") "C1525")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Description") "MLCC 100nF 16V X7R")
+        (field
+          (name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "C86"))
+      (libsource
+        (lib "NO_LIB")
+        (part "C_100nF_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "6f3c04dd-520e-59fb-a347-f1013eddb2e2"))
+    (comp
       (ref "C9")
       (value "10nF")
       (description "MLCC 10nF 50V X7R")
@@ -2777,7 +2841,7 @@
         (field
           (name "Group") "UI")
         (field
-          (name "Note") "3V3 power-good indicator")
+          (name "Note") "3V3 rail indicator")
         (field
           (name "Description") "Green LED")
         (field
@@ -3377,6 +3441,36 @@
       (component_classes)
       (tstamps "18f973cb-a59f-57ca-8fcc-4553ee8b8f10"))
     (comp
+      (ref "J9")
+      (value "2x8 header")
+      (description "2x8 SPI/I2C TFT display header (dupont-wire friendly)")
+      (footprint "Connector_PinHeader_2.54mm:PinHeader_2x08_P2.54mm_Vertical")
+      (fields
+        (field
+          (name "MPN") "61301621121")
+        (field
+          (name "Manufacturer") "Wurth Elektronik")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Note") "SPI TFT header; silkscreen labels = LCD_HEADER_LABELS")
+        (field
+          (name "Description") "2x8 SPI/I2C TFT display header (dupont-wire friendly)")
+        (field
+          (name "Footprint") "Connector_PinHeader_2.54mm:PinHeader_2x08_P2.54mm_Vertical")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "J9"))
+      (libsource
+        (lib "NO_LIB")
+        (part "61301621121"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "b84cd4ea-7126-5975-b238-83f68de8e49f"))
+    (comp
       (ref "J_CAM")
       (value "FPC 22P 0.5mm")
       (description "22-pin 0.5 mm FPC, same top-contact part as Raspberry Pi 5 -> standard Pi cables, no mirroring")
@@ -3659,6 +3753,38 @@
       (component_classes)
       (tstamps "8b3eeb49-422c-5be2-865d-3dfba2211852"))
     (comp
+      (ref "Q6")
+      (value "AO3401A")
+      (description "-30 V -4 A P-MOSFET (high-side load switch)")
+      (footprint "Package_TO_SOT_SMD:SOT-23")
+      (fields
+        (field
+          (name "MPN") "AO3401A")
+        (field
+          (name "Manufacturer") "Alpha & Omega Semiconductor")
+        (field
+          (name "LCSC") "C15127")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Note") "Backlight high-side switch: safe for modules without an on-board BL transistor")
+        (field
+          (name "Description") "-30 V -4 A P-MOSFET (high-side load switch)")
+        (field
+          (name "Footprint") "Package_TO_SOT_SMD:SOT-23")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "Q6"))
+      (libsource
+        (lib "NO_LIB")
+        (part "AO3401A"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "e1b2b674-b3d5-5a98-ba80-08b09ecb1a48"))
+    (comp
       (ref "R1")
       (value "0R")
       (description "Thick-film resistor, jumper")
@@ -3692,22 +3818,22 @@
       (tstamps "91628e47-8f83-5ba1-abed-4cb134d83eea"))
     (comp
       (ref "R10")
-      (value "0R")
-      (description "Thick-film resistor, jumper")
+      (value "1M")
+      (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402JR-070RL")
+          (name "MPN") "RC0402FR-071ML")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "LCSC") "C60485")
+          (name "DNP") "DNP")
         (field
-          (name "Group") "Clock")
+          (name "Group") "SoC support")
         (field
-          (name "Note") "Espressif R3")
+          (name "Note") "Espressif rev1.x DP pull-down, DNP on rev v3.x")
         (field
-          (name "Description") "Thick-film resistor, jumper")
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -3716,12 +3842,14 @@
           (name "SKiDL Tag") "R10"))
       (libsource
         (lib "NO_LIB")
-        (part "R_0_0402"))
+        (part "R_1M_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "99b6d9e4-efbb-57f3-bc7c-dc7822d36beb"))
+      (tstamps "99b6d9e4-efbb-57f3-bc7c-dc7822d36beb")
+      (property
+        (name "dnp")))
     (comp
       (ref "R11")
       (value "0R")
@@ -3737,7 +3865,7 @@
         (field
           (name "Group") "Clock")
         (field
-          (name "Note") "Espressif R4")
+          (name "Note") "Espressif R3")
         (field
           (name "Description") "Thick-film resistor, jumper")
         (field
@@ -3767,9 +3895,9 @@
         (field
           (name "LCSC") "C60485")
         (field
-          (name "Group") "QSPI flash")
+          (name "Group") "Clock")
         (field
-          (name "Note") "Espressif-recommended series footprint (drive/EMI tuning)")
+          (name "Note") "Espressif R4")
         (field
           (name "Description") "Thick-film resistor, jumper")
         (field
@@ -3948,6 +4076,38 @@
       (tstamps "47689824-ff01-5dd6-9338-a42dda36a2ce"))
     (comp
       (ref "R18")
+      (value "0R")
+      (description "Thick-film resistor, jumper")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402JR-070RL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "LCSC") "C60485")
+        (field
+          (name "Group") "QSPI flash")
+        (field
+          (name "Note") "Espressif-recommended series footprint (drive/EMI tuning)")
+        (field
+          (name "Description") "Thick-film resistor, jumper")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R18"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_0_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "e4735f31-c71b-5536-824e-0b76945c5495"))
+    (comp
+      (ref "R19")
       (value "10k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -3969,40 +4129,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R18"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_10k_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "e4735f31-c71b-5536-824e-0b76945c5495"))
-    (comp
-      (ref "R19")
-      (value "499k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-07499KL")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "Group") "VDD_HP DCDC")
-        (field
-          (name "Note") "Espressif R1 (rev v3.x: populate)")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R19"))
       (libsource
         (lib "NO_LIB")
-        (part "R_499k_0402"))
+        (part "R_10k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4053,7 +4183,7 @@
         (field
           (name "Group") "VDD_HP DCDC")
         (field
-          (name "Note") "Espressif R2 (rev v3.x: populate)")
+          (name "Note") "Espressif R1 (rev v3.x: populate)")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -4072,6 +4202,36 @@
       (tstamps "6d059f79-f7fb-532a-98db-972feb6a8e76"))
     (comp
       (ref "R21")
+      (value "499k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-07499KL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "VDD_HP DCDC")
+        (field
+          (name "Note") "Espressif R2 (rev v3.x: populate)")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R21"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_499k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "c1d03f1d-6f40-597c-ab3d-c264934f0117"))
+    (comp
+      (ref "R22")
       (value "75k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4091,7 +4251,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R21"))
+          (name "SKiDL Tag") "R22"))
       (libsource
         (lib "NO_LIB")
         (part "R_75k_0402"))
@@ -4099,9 +4259,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "c1d03f1d-6f40-597c-ab3d-c264934f0117"))
+      (tstamps "d4537170-d531-5db3-93c4-874ba3ead571"))
     (comp
-      (ref "R22")
+      (ref "R23")
       (value "24k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4119,7 +4279,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R22"))
+          (name "SKiDL Tag") "R23"))
       (libsource
         (lib "NO_LIB")
         (part "R_24k_0402"))
@@ -4127,9 +4287,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "d4537170-d531-5db3-93c4-874ba3ead571"))
+      (tstamps "1abe2392-84c4-5963-bbc8-555b73bed1d8"))
     (comp
-      (ref "R23")
+      (ref "R24")
       (value "100k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4147,7 +4307,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R23"))
+          (name "SKiDL Tag") "R24"))
       (libsource
         (lib "NO_LIB")
         (part "R_100k_0402"))
@@ -4155,9 +4315,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "1abe2392-84c4-5963-bbc8-555b73bed1d8"))
+      (tstamps "76126967-3058-5beb-8348-178721f5f1ea"))
     (comp
-      (ref "R24")
+      (ref "R25")
       (value "1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4177,40 +4337,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R24"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_1k_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "76126967-3058-5beb-8348-178721f5f1ea"))
-    (comp
-      (ref "R25")
-      (value "5.1k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-075K1L")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "Group") "USB1 HS")
-        (field
-          (name "Note") "UFP Rd")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R25"))
       (libsource
         (lib "NO_LIB")
-        (part "R_5.1k_0402"))
+        (part "R_1k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4248,22 +4378,20 @@
       (tstamps "35cd32e0-2eec-5ec5-b4e8-e5bbdbdb9060"))
     (comp
       (ref "R27")
-      (value "0R")
-      (description "Thick-film resistor, jumper")
+      (value "5.1k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402JR-070RL")
+          (name "MPN") "RC0402FR-075K1L")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "LCSC") "C60485")
-        (field
           (name "Group") "USB1 HS")
         (field
-          (name "Note") "Espressif: reserve R/C near SoC")
+          (name "Note") "UFP Rd")
         (field
-          (name "Description") "Thick-film resistor, jumper")
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -4272,7 +4400,7 @@
           (name "SKiDL Tag") "R27"))
       (libsource
         (lib "NO_LIB")
-        (part "R_0_0402"))
+        (part "R_5.1k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4312,20 +4440,22 @@
       (tstamps "61b48c9f-00ee-57f6-8009-23b11a90f392"))
     (comp
       (ref "R29")
-      (value "5.1k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
+      (value "0R")
+      (description "Thick-film resistor, jumper")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-075K1L")
+          (name "MPN") "RC0402JR-070RL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "Group") "USB2 debug UART")
+          (name "LCSC") "C60485")
         (field
-          (name "Note") "UFP Rd")
+          (name "Group") "USB1 HS")
         (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+          (name "Note") "Espressif: reserve R/C near SoC")
+        (field
+          (name "Description") "Thick-film resistor, jumper")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -4334,7 +4464,7 @@
           (name "SKiDL Tag") "R29"))
       (libsource
         (lib "NO_LIB")
-        (part "R_5.1k_0402"))
+        (part "R_0_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4404,6 +4534,36 @@
       (tstamps "f064446f-1abb-5ab7-9657-2f2853315805"))
     (comp
       (ref "R31")
+      (value "5.1k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-075K1L")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "USB2 debug UART")
+        (field
+          (name "Note") "UFP Rd")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R31"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_5.1k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "65cc3c35-189e-570b-b5bc-3cd7dc2d2aef"))
+    (comp
+      (ref "R32")
       (value "22.1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4423,7 +4583,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R31"))
+          (name "SKiDL Tag") "R32"))
       (libsource
         (lib "NO_LIB")
         (part "R_22.1k_0402"))
@@ -4431,9 +4591,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "65cc3c35-189e-570b-b5bc-3cd7dc2d2aef"))
+      (tstamps "6858d70f-fc35-59bd-9cb9-213e09f59676"))
     (comp
-      (ref "R32")
+      (ref "R33")
       (value "47.5k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4453,7 +4613,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R32"))
+          (name "SKiDL Tag") "R33"))
       (libsource
         (lib "NO_LIB")
         (part "R_47.5k_0402"))
@@ -4461,9 +4621,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "6858d70f-fc35-59bd-9cb9-213e09f59676"))
+      (tstamps "19f11603-7b26-5e94-8b85-b12459e3b930"))
     (comp
-      (ref "R33")
+      (ref "R34")
       (value "1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4483,40 +4643,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R33"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_1k_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "19f11603-7b26-5e94-8b85-b12459e3b930"))
-    (comp
-      (ref "R34")
-      (value "10k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-0710KL")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "LCSC") "C60490")
-        (field
-          (name "Group") "USB2 debug UART")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R34"))
       (libsource
         (lib "NO_LIB")
-        (part "R_10k_0402"))
+        (part "R_1k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4554,18 +4684,18 @@
       (tstamps "c18b3153-aa22-515a-8b39-79a9493340a7"))
     (comp
       (ref "R36")
-      (value "5.1k")
+      (value "10k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-075K1L")
+          (name "MPN") "RC0402FR-0710KL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "Group") "USB3 USB-Serial-JTAG")
+          (name "LCSC") "C60490")
         (field
-          (name "Note") "UFP Rd")
+          (name "Group") "USB2 debug UART")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -4576,7 +4706,7 @@
           (name "SKiDL Tag") "R36"))
       (libsource
         (lib "NO_LIB")
-        (part "R_5.1k_0402"))
+        (part "R_10k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4614,18 +4744,18 @@
       (tstamps "92df088b-f6e6-5813-b0bc-b368d50d4392"))
     (comp
       (ref "R38")
-      (value "22")
+      (value "5.1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-0722RL")
+          (name "MPN") "RC0402FR-075K1L")
         (field
           (name "Manufacturer") "YAGEO")
         (field
           (name "Group") "USB3 USB-Serial-JTAG")
         (field
-          (name "Note") "Espressif FS series R")
+          (name "Note") "UFP Rd")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -4636,7 +4766,7 @@
           (name "SKiDL Tag") "R38"))
       (libsource
         (lib "NO_LIB")
-        (part "R_22_0402"))
+        (part "R_5.1k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4713,9 +4843,9 @@
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "Group") "Ethernet")
+          (name "Group") "USB3 USB-Serial-JTAG")
         (field
-          (name "Note") "Source termination at SoC")
+          (name "Note") "Espressif FS series R")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -4805,7 +4935,7 @@
         (field
           (name "Group") "Ethernet")
         (field
-          (name "Note") "Source termination at PHY")
+          (name "Note") "Source termination at SoC")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -4884,6 +5014,36 @@
       (tstamps "84ee33b1-4197-5c39-a549-dcdec6c6a6ba"))
     (comp
       (ref "R46")
+      (value "22")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-0722RL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "Ethernet")
+        (field
+          (name "Note") "Source termination at PHY")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R46"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_22_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "2f0f02a1-69e3-573e-85e4-f4b5a242bfc0"))
+    (comp
+      (ref "R47")
       (value "33")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4903,7 +5063,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R46"))
+          (name "SKiDL Tag") "R47"))
       (libsource
         (lib "NO_LIB")
         (part "R_33_0402"))
@@ -4911,9 +5071,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "2f0f02a1-69e3-573e-85e4-f4b5a242bfc0"))
+      (tstamps "018327c3-341b-5fcd-a229-4c1f16ce373d"))
     (comp
-      (ref "R47")
+      (ref "R48")
       (value "12.1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -4933,42 +5093,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R47"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_12.1k_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "018327c3-341b-5fcd-a229-4c1f16ce373d"))
-    (comp
-      (ref "R48")
-      (value "10k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-0710KL")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "LCSC") "C60490")
-        (field
-          (name "Group") "Ethernet")
-        (field
-          (name "Note") "nINTSEL = 0 -> REF_CLK-out (50 MHz on pin 14)")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R48"))
       (libsource
         (lib "NO_LIB")
-        (part "R_10k_0402"))
+        (part "R_12.1k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -4989,7 +5117,7 @@
         (field
           (name "Group") "Ethernet")
         (field
-          (name "Note") "PHYAD0 = 0")
+          (name "Note") "nINTSEL = 0 -> REF_CLK-out (50 MHz on pin 14)")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -5051,6 +5179,8 @@
         (field
           (name "Group") "Ethernet")
         (field
+          (name "Note") "PHYAD0 = 0")
+        (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
@@ -5068,6 +5198,36 @@
       (tstamps "99ec5074-baca-54ff-b407-26124c2da259"))
     (comp
       (ref "R51")
+      (value "10k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-0710KL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "LCSC") "C60490")
+        (field
+          (name "Group") "Ethernet")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R51"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_10k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "8e415a6e-aaad-549d-afd5-a2b4ab1ff50e"))
+    (comp
+      (ref "R52")
       (value "1.5k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -5087,42 +5247,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R51"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_1.5k_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "8e415a6e-aaad-549d-afd5-a2b4ab1ff50e"))
-    (comp
-      (ref "R52")
-      (value "49.9")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-0749R9L")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "LCSC") "C87044")
-        (field
-          (name "Group") "Ethernet")
-        (field
-          (name "Note") "LAN8720A line termination")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R52"))
       (libsource
         (lib "NO_LIB")
-        (part "R_49.9_0402"))
+        (part "R_1.5k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -5226,6 +5354,38 @@
       (tstamps "369eac4e-7790-57a9-b39e-2fa13cbea328"))
     (comp
       (ref "R56")
+      (value "49.9")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-0749R9L")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "LCSC") "C87044")
+        (field
+          (name "Group") "Ethernet")
+        (field
+          (name "Note") "LAN8720A line termination")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R56"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_49.9_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "c2a7bdca-cc31-5fde-ac76-741d305bc64e"))
+    (comp
+      (ref "R57")
       (value "330")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -5245,7 +5405,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R56"))
+          (name "SKiDL Tag") "R57"))
       (libsource
         (lib "NO_LIB")
         (part "R_330_0402"))
@@ -5253,9 +5413,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "c2a7bdca-cc31-5fde-ac76-741d305bc64e"))
+      (tstamps "228c601b-e8eb-5689-a6bb-9dba53168aee"))
     (comp
-      (ref "R57")
+      (ref "R58")
       (value "330")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -5275,42 +5435,10 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R57"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_330_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "228c601b-e8eb-5689-a6bb-9dba53168aee"))
-    (comp
-      (ref "R58")
-      (value "0R")
-      (description "Thick-film resistor, jumper")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402JR-070RL")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "LCSC") "C60485")
-        (field
-          (name "Group") "microSD")
-        (field
-          (name "Note") "Espressif: reserve series R on every SDIO line")
-        (field
-          (name "Description") "Thick-film resistor, jumper")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
           (name "SKiDL Tag") "R58"))
       (libsource
         (lib "NO_LIB")
-        (part "R_0_0402"))
+        (part "R_330_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -5510,20 +5638,22 @@
       (tstamps "59dfa5ed-7ff2-5bdb-b055-0971bf7cfbfa"))
     (comp
       (ref "R64")
-      (value "51k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
+      (value "0R")
+      (description "Thick-film resistor, jumper")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-0751KL")
+          (name "MPN") "RC0402JR-070RL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
+          (name "LCSC") "C60485")
+        (field
           (name "Group") "microSD")
         (field
-          (name "Note") "Pull-up to VDDO_4 (1.8/3.3 V UHS-I switching)")
+          (name "Note") "Espressif: reserve series R on every SDIO line")
         (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+          (name "Description") "Thick-film resistor, jumper")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -5532,7 +5662,7 @@
           (name "SKiDL Tag") "R64"))
       (libsource
         (lib "NO_LIB")
-        (part "R_51k_0402"))
+        (part "R_0_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -5660,20 +5790,18 @@
       (tstamps "aac71c99-3423-5e49-82c0-3ddf0499fe4a"))
     (comp
       (ref "R69")
-      (value "10k")
+      (value "51k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-0710KL")
+          (name "MPN") "RC0402FR-0751KL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "LCSC") "C60490")
-        (field
           (name "Group") "microSD")
         (field
-          (name "Note") "Card powered by default")
+          (name "Note") "Pull-up to VDDO_4 (1.8/3.3 V UHS-I switching)")
         (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
@@ -5684,7 +5812,7 @@
           (name "SKiDL Tag") "R69"))
       (libsource
         (lib "NO_LIB")
-        (part "R_10k_0402"))
+        (part "R_51k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -5737,6 +5865,8 @@
         (field
           (name "Group") "microSD")
         (field
+          (name "Note") "Card powered by default")
+        (field
           (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
@@ -5754,22 +5884,20 @@
       (tstamps "dc79372c-7d59-521c-a570-00285a0d4434"))
     (comp
       (ref "R71")
-      (value "0R")
-      (description "Thick-film resistor, jumper")
+      (value "10k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402JR-070RL")
+          (name "MPN") "RC0402FR-0710KL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "LCSC") "C60485")
+          (name "LCSC") "C60490")
         (field
-          (name "Group") "Camera CSI")
+          (name "Group") "microSD")
         (field
-          (name "Note") "Espressif: reserve 0R on MIPI lines")
-        (field
-          (name "Description") "Thick-film resistor, jumper")
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -5778,7 +5906,7 @@
           (name "SKiDL Tag") "R71"))
       (libsource
         (lib "NO_LIB")
-        (part "R_0_0402"))
+        (part "R_10k_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -5957,7 +6085,7 @@
         (field
           (name "LCSC") "C60485")
         (field
-          (name "Group") "Display DSI")
+          (name "Group") "Camera CSI")
         (field
           (name "Note") "Espressif: reserve 0R on MIPI lines")
         (field
@@ -6170,18 +6298,22 @@
       (tstamps "d33a6380-9062-5e4b-97e4-162aa30dc6f0"))
     (comp
       (ref "R83")
-      (value "2.2k")
-      (description "Thick-film resistor, 1 %, 1/16 W")
+      (value "0R")
+      (description "Thick-film resistor, jumper")
       (footprint "Resistor_SMD:R_0402_1005Metric")
       (fields
         (field
-          (name "MPN") "RC0402FR-072K2L")
+          (name "MPN") "RC0402JR-070RL")
         (field
           (name "Manufacturer") "YAGEO")
         (field
-          (name "Group") "I2C")
+          (name "LCSC") "C60485")
         (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+          (name "Group") "Display DSI")
+        (field
+          (name "Note") "Espressif: reserve 0R on MIPI lines")
+        (field
+          (name "Description") "Thick-film resistor, jumper")
         (field
           (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
         (field
@@ -6190,7 +6322,7 @@
           (name "SKiDL Tag") "R83"))
       (libsource
         (lib "NO_LIB")
-        (part "R_2.2k_0402"))
+        (part "R_0_0402"))
       (sheetpath
         (names "/")
         (tstamps "/"))
@@ -6226,6 +6358,34 @@
       (tstamps "435d1dff-259c-5baf-8fc3-b1e82ba0277e"))
     (comp
       (ref "R85")
+      (value "2.2k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-072K2L")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "I2C")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R85"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_2.2k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "be5c5948-bb57-5e67-8d21-4cc2058721af"))
+    (comp
+      (ref "R86")
       (value "100")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6245,7 +6405,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R85"))
+          (name "SKiDL Tag") "R86"))
       (libsource
         (lib "NO_LIB")
         (part "R_100_0402"))
@@ -6253,9 +6413,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "be5c5948-bb57-5e67-8d21-4cc2058721af"))
+      (tstamps "cfedb725-c0e8-5a5c-b05d-5b44d1a59212"))
     (comp
-      (ref "R86")
+      (ref "R87")
       (value "100k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6275,7 +6435,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R86"))
+          (name "SKiDL Tag") "R87"))
       (libsource
         (lib "NO_LIB")
         (part "R_100k_0402"))
@@ -6283,9 +6443,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "cfedb725-c0e8-5a5c-b05d-5b44d1a59212"))
+      (tstamps "8e9837b9-f03f-5920-b03e-3b93f2b5f8bc"))
     (comp
-      (ref "R87")
+      (ref "R88")
       (value "10k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6309,7 +6469,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R87"))
+          (name "SKiDL Tag") "R88"))
       (libsource
         (lib "NO_LIB")
         (part "R_10k_0402"))
@@ -6317,11 +6477,11 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "8e9837b9-f03f-5920-b03e-3b93f2b5f8bc")
+      (tstamps "363bc9af-ffe1-5239-8cb4-b15a3567d6a2")
       (property
         (name "dnp")))
     (comp
-      (ref "R88")
+      (ref "R89")
       (value "100k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6339,7 +6499,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R88"))
+          (name "SKiDL Tag") "R89"))
       (libsource
         (lib "NO_LIB")
         (part "R_100k_0402"))
@@ -6347,9 +6507,41 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "363bc9af-ffe1-5239-8cb4-b15a3567d6a2"))
+      (tstamps "a568c62e-5d99-5be8-9abe-e4e2f15ea31b"))
     (comp
-      (ref "R89")
+      (ref "R9")
+      (value "1k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-071KL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "LCSC") "C106235")
+        (field
+          (name "Group") "SoC support")
+        (field
+          (name "Note") "Isolates the ~50 mm BOOT button / auto-program stub from the 50 MHz RMII TXD1 line; pressed: 3.3 V x 1k/11k = 0.3 V < VIL")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R9"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_1k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "abe8364b-5ed9-593a-a990-c9655e96dd67"))
+    (comp
+      (ref "R90")
       (value "10k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6371,7 +6563,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R89"))
+          (name "SKiDL Tag") "R90"))
       (libsource
         (lib "NO_LIB")
         (part "R_10k_0402"))
@@ -6379,43 +6571,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "a568c62e-5d99-5be8-9abe-e4e2f15ea31b"))
+      (tstamps "e97d8ff1-e331-5989-8423-0f24139dcb6d"))
     (comp
-      (ref "R9")
-      (value "1M")
-      (description "Thick-film resistor, 1 %, 1/16 W")
-      (footprint "Resistor_SMD:R_0402_1005Metric")
-      (fields
-        (field
-          (name "MPN") "RC0402FR-071ML")
-        (field
-          (name "Manufacturer") "YAGEO")
-        (field
-          (name "DNP") "DNP")
-        (field
-          (name "Group") "SoC support")
-        (field
-          (name "Note") "Espressif rev1.x DP pull-down, DNP on rev v3.x")
-        (field
-          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
-        (field
-          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
-        (field
-          (name "Datasheet"))
-        (field
-          (name "SKiDL Tag") "R9"))
-      (libsource
-        (lib "NO_LIB")
-        (part "R_1M_0402"))
-      (sheetpath
-        (names "/")
-        (tstamps "/"))
-      (component_classes)
-      (tstamps "abe8364b-5ed9-593a-a990-c9655e96dd67")
-      (property
-        (name "dnp")))
-    (comp
-      (ref "R90")
+      (ref "R91")
       (value "10k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6437,7 +6595,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R90"))
+          (name "SKiDL Tag") "R91"))
       (libsource
         (lib "NO_LIB")
         (part "R_10k_0402"))
@@ -6445,9 +6603,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "e97d8ff1-e331-5989-8423-0f24139dcb6d"))
+      (tstamps "9402a61f-83f9-5d02-9864-2872526e4434"))
     (comp
-      (ref "R91")
+      (ref "R92")
       (value "1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6469,7 +6627,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R91"))
+          (name "SKiDL Tag") "R92"))
       (libsource
         (lib "NO_LIB")
         (part "R_1k_0402"))
@@ -6477,9 +6635,9 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "9402a61f-83f9-5d02-9864-2872526e4434"))
+      (tstamps "c6799aa0-3d24-5c52-84af-0aa5c7dac0dc"))
     (comp
-      (ref "R92")
+      (ref "R93")
       (value "1k")
       (description "Thick-film resistor, 1 %, 1/16 W")
       (footprint "Resistor_SMD:R_0402_1005Metric")
@@ -6499,7 +6657,7 @@
         (field
           (name "Datasheet"))
         (field
-          (name "SKiDL Tag") "R92"))
+          (name "SKiDL Tag") "R93"))
       (libsource
         (lib "NO_LIB")
         (part "R_1k_0402"))
@@ -6507,7 +6665,67 @@
         (names "/")
         (tstamps "/"))
       (component_classes)
-      (tstamps "c6799aa0-3d24-5c52-84af-0aa5c7dac0dc"))
+      (tstamps "41fdd930-d021-52f2-8916-e089e177b826"))
+    (comp
+      (ref "R94")
+      (value "22")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-0722RL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Note") "SPI CLK series R (Espressif EMC rule)")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R94"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_22_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "c1a7a6a2-fa90-5b39-8ebc-165a1aa75e80"))
+    (comp
+      (ref "R95")
+      (value "100k")
+      (description "Thick-film resistor, 1 %, 1/16 W")
+      (footprint "Resistor_SMD:R_0402_1005Metric")
+      (fields
+        (field
+          (name "MPN") "RC0402FR-07100KL")
+        (field
+          (name "Manufacturer") "YAGEO")
+        (field
+          (name "Group") "Display SPI")
+        (field
+          (name "Note") "Backlight on at reset")
+        (field
+          (name "Description") "Thick-film resistor, 1 %, 1/16 W")
+        (field
+          (name "Footprint") "Resistor_SMD:R_0402_1005Metric")
+        (field
+          (name "Datasheet"))
+        (field
+          (name "SKiDL Tag") "R95"))
+      (libsource
+        (lib "NO_LIB")
+        (part "R_100k_0402"))
+      (sheetpath
+        (names "/")
+        (tstamps "/"))
+      (component_classes)
+      (tstamps "9f56053d-dcf6-56ff-b38b-2405ada8406b"))
     (comp
       (ref "SW1")
       (value "Tactile")
@@ -7096,6 +7314,10 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
         (ref "J_CAM")
         (pin "22")
         (pintype "PASSIVE"))
@@ -7112,6 +7334,10 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "Q6")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "R1")
         (pin "1")
         (pintype "PASSIVE"))
@@ -7120,11 +7346,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R21")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R23")
+        (ref "R22")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7132,15 +7354,19 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R33")
+        (ref "R25")
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R50")
+        (ref "R34")
         (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R51")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R52")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7152,7 +7378,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R70")
+        (ref "R71")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7160,19 +7386,19 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R83")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
         (ref "R84")
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R89")
+        (ref "R85")
         (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R90")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R91")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7229,14 +7455,30 @@
         (pintype "PASSIVE")))
     (net
       (code 2)
-      (name "BUCK_FB")
+      (name "BOOT_BTN")
       (class "Default")
       (node
-        (ref "R21")
+        (ref "Q1")
+        (pin "3")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R9")
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "SW2")
+        (pin "1")
+        (pintype "PASSIVE")))
+    (net
+      (code 3)
+      (name "BUCK_FB")
+      (class "Default")
+      (node
         (ref "R22")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R23")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7244,11 +7486,11 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 3)
+      (code 4)
       (name "BUCK_PG")
       (class "Default")
       (node
-        (ref "R23")
+        (ref "R24")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7256,7 +7498,7 @@
         (pin "4")
         (pintype "PASSIVE")))
     (net
-      (code 4)
+      (code 5)
       (name "BUCK_SS")
       (class "Default")
       (node
@@ -7268,7 +7510,7 @@
         (pin "9")
         (pintype "PASSIVE")))
     (net
-      (code 5)
+      (code 6)
       (name "BUCK_SW")
       (class "POWER,Default")
       (node
@@ -7288,7 +7530,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 6)
+      (code 7)
       (name "CAM_CLK_N")
       (class "MIPI_100,Default")
       (node
@@ -7296,11 +7538,11 @@
         (pin "8")
         (pintype "PASSIVE"))
       (node
-        (ref "R76")
+        (ref "R77")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 7)
+      (code 8)
       (name "CAM_CLK_P")
       (class "MIPI_100,Default")
       (node
@@ -7308,11 +7550,11 @@
         (pin "9")
         (pintype "PASSIVE"))
       (node
-        (ref "R75")
+        (ref "R76")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 8)
+      (code 9)
       (name "CAM_D0_N")
       (class "MIPI_100,Default")
       (node
@@ -7320,11 +7562,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R72")
+        (ref "R73")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 9)
+      (code 10)
       (name "CAM_D0_P")
       (class "MIPI_100,Default")
       (node
@@ -7332,11 +7574,11 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R71")
+        (ref "R72")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 10)
+      (code 11)
       (name "CAM_D1_N")
       (class "MIPI_100,Default")
       (node
@@ -7344,11 +7586,11 @@
         (pin "5")
         (pintype "PASSIVE"))
       (node
-        (ref "R74")
+        (ref "R75")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 11)
+      (code 12)
       (name "CAM_D1_P")
       (class "MIPI_100,Default")
       (node
@@ -7356,11 +7598,11 @@
         (pin "6")
         (pintype "PASSIVE"))
       (node
-        (ref "R73")
+        (ref "R74")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 12)
+      (code 13)
       (name "CAM_EN")
       (class "Default")
       (node
@@ -7372,7 +7614,7 @@
         (pin "13")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 13)
+      (code 14)
       (name "CAM_IO1")
       (class "Default")
       (node
@@ -7384,7 +7626,7 @@
         (pin "14")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 14)
+      (code 15)
       (name "CHIP_PU")
       (class "Default")
       (node
@@ -7408,7 +7650,7 @@
         (pin "103")
         (pintype "INPUT")))
     (net
-      (code 15)
+      (code 16)
       (name "CP_DTR")
       (class "Default")
       (node
@@ -7416,7 +7658,7 @@
         (pin "4")
         (pintype "PASSIVE"))
       (node
-        (ref "R34")
+        (ref "R35")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7424,11 +7666,11 @@
         (pin "23")
         (pintype "PASSIVE")))
     (net
-      (code 16)
+      (code 17)
       (name "CP_RST_N")
       (class "Default")
       (node
-        (ref "R33")
+        (ref "R34")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7436,7 +7678,7 @@
         (pin "9")
         (pintype "PASSIVE")))
     (net
-      (code 17)
+      (code 18)
       (name "CP_RTS")
       (class "Default")
       (node
@@ -7444,7 +7686,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R35")
+        (ref "R36")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7452,15 +7694,15 @@
         (pin "19")
         (pintype "PASSIVE")))
     (net
-      (code 18)
+      (code 19)
       (name "CP_VBUS_SENSE")
       (class "Default")
       (node
-        (ref "R31")
+        (ref "R32")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R32")
+        (ref "R33")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7468,11 +7710,11 @@
         (pin "8")
         (pintype "PASSIVE")))
     (net
-      (code 19)
+      (code 20)
       (name "CSI_CLK_N")
       (class "MIPI_100,Default")
       (node
-        (ref "R76")
+        (ref "R77")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7480,11 +7722,11 @@
         (pin "45")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 20)
+      (code 21)
       (name "CSI_CLK_P")
       (class "MIPI_100,Default")
       (node
-        (ref "R75")
+        (ref "R76")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7492,44 +7734,8 @@
         (pin "44")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 21)
-      (name "CSI_D0_N")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R72")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "42")
-        (pintype "BIDIRECTIONAL")))
-    (net
       (code 22)
-      (name "CSI_D0_P")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R71")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "43")
-        (pintype "BIDIRECTIONAL")))
-    (net
-      (code 23)
-      (name "CSI_D1_N")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R74")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "46")
-        (pintype "BIDIRECTIONAL")))
-    (net
-      (code 24)
-      (name "CSI_D1_P")
+      (name "CSI_D0_N")
       (class "MIPI_100,Default")
       (node
         (ref "R73")
@@ -7537,10 +7743,46 @@
         (pintype "PASSIVE"))
       (node
         (ref "U1")
-        (pin "47")
+        (pin "42")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 23)
+      (name "CSI_D0_P")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R72")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "43")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 24)
+      (name "CSI_D1_N")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R75")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "46")
         (pintype "BIDIRECTIONAL")))
     (net
       (code 25)
+      (name "CSI_D1_P")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R74")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "47")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 26)
       (name "CSI_REXT")
       (class "Default")
       (node
@@ -7552,7 +7794,7 @@
         (pin "48")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 26)
+      (code 27)
       (name "DISP_CLK_N")
       (class "MIPI_100,Default")
       (node
@@ -7560,11 +7802,11 @@
         (pin "8")
         (pintype "PASSIVE"))
       (node
-        (ref "R82")
+        (ref "R83")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 27)
+      (code 28)
       (name "DISP_CLK_P")
       (class "MIPI_100,Default")
       (node
@@ -7572,11 +7814,11 @@
         (pin "9")
         (pintype "PASSIVE"))
       (node
-        (ref "R81")
+        (ref "R82")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 28)
+      (code 29)
       (name "DISP_D0_N")
       (class "MIPI_100,Default")
       (node
@@ -7584,11 +7826,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R78")
+        (ref "R79")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 29)
+      (code 30)
       (name "DISP_D0_P")
       (class "MIPI_100,Default")
       (node
@@ -7596,11 +7838,11 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R77")
+        (ref "R78")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 30)
+      (code 31)
       (name "DISP_D1_N")
       (class "MIPI_100,Default")
       (node
@@ -7608,11 +7850,11 @@
         (pin "5")
         (pintype "PASSIVE"))
       (node
-        (ref "R80")
+        (ref "R81")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 31)
+      (code 32)
       (name "DISP_D1_P")
       (class "MIPI_100,Default")
       (node
@@ -7620,15 +7862,15 @@
         (pin "6")
         (pintype "PASSIVE"))
       (node
-        (ref "R79")
+        (ref "R80")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 32)
+      (code 33)
       (name "DSI_CLK_N")
       (class "MIPI_100,Default")
       (node
-        (ref "R82")
+        (ref "R83")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7636,11 +7878,11 @@
         (pin "37")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 33)
+      (code 34)
       (name "DSI_CLK_P")
       (class "MIPI_100,Default")
       (node
-        (ref "R81")
+        (ref "R82")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7648,44 +7890,8 @@
         (pin "38")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 34)
-      (name "DSI_D0_N")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R78")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "40")
-        (pintype "BIDIRECTIONAL")))
-    (net
       (code 35)
-      (name "DSI_D0_P")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R77")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "39")
-        (pintype "BIDIRECTIONAL")))
-    (net
-      (code 36)
-      (name "DSI_D1_N")
-      (class "MIPI_100,Default")
-      (node
-        (ref "R80")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "36")
-        (pintype "BIDIRECTIONAL")))
-    (net
-      (code 37)
-      (name "DSI_D1_P")
+      (name "DSI_D0_N")
       (class "MIPI_100,Default")
       (node
         (ref "R79")
@@ -7693,10 +7899,46 @@
         (pintype "PASSIVE"))
       (node
         (ref "U1")
-        (pin "35")
+        (pin "40")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 36)
+      (name "DSI_D0_P")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R78")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "39")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 37)
+      (name "DSI_D1_N")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R81")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "36")
         (pintype "BIDIRECTIONAL")))
     (net
       (code 38)
+      (name "DSI_D1_P")
+      (class "MIPI_100,Default")
+      (node
+        (ref "R80")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "35")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 39)
       (name "DSI_REXT")
       (class "Default")
       (node
@@ -7708,7 +7950,7 @@
         (pin "34")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 39)
+      (code 40)
       (name "ETH_CT")
       (class "Default")
       (node
@@ -7732,18 +7974,6 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 40)
-      (name "ETH_LED_ACT_A")
-      (class "Default")
-      (node
-        (ref "J4")
-        (pin "12")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R57")
-        (pin "2")
-        (pintype "PASSIVE")))
-    (net
       (code 41)
       (name "ETH_LED_LINK_A")
       (class "Default")
@@ -7752,11 +7982,23 @@
         (pin "9")
         (pintype "PASSIVE"))
       (node
-        (ref "R56")
+        (ref "R57")
         (pin "2")
         (pintype "PASSIVE")))
     (net
       (code 42)
+      (name "ETH_LED_SPEED_A")
+      (class "Default")
+      (node
+        (ref "J4")
+        (pin "12")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R58")
+        (pin "2")
+        (pintype "PASSIVE")))
+    (net
+      (code 43)
       (name "ETH_MDC")
       (class "Default")
       (node
@@ -7768,11 +8010,11 @@
         (pin "13")
         (pintype "PASSIVE")))
     (net
-      (code 43)
+      (code 44)
       (name "ETH_MDIO")
       (class "Default")
       (node
-        (ref "R51")
+        (ref "R52")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7784,11 +8026,11 @@
         (pin "12")
         (pintype "PASSIVE")))
     (net
-      (code 44)
+      (code 45)
       (name "ETH_PHY_RST_N")
       (class "Default")
       (node
-        (ref "R50")
+        (ref "R51")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7800,7 +8042,7 @@
         (pin "15")
         (pintype "PASSIVE")))
     (net
-      (code 45)
+      (code 46)
       (name "ETH_RX_N")
       (class "ETH_100,Default")
       (node
@@ -7808,7 +8050,7 @@
         (pin "6")
         (pintype "PASSIVE"))
       (node
-        (ref "R55")
+        (ref "R56")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7816,7 +8058,7 @@
         (pin "22")
         (pintype "PASSIVE")))
     (net
-      (code 46)
+      (code 47)
       (name "ETH_RX_P")
       (class "ETH_100,Default")
       (node
@@ -7824,7 +8066,7 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R54")
+        (ref "R55")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7832,7 +8074,7 @@
         (pin "23")
         (pintype "PASSIVE")))
     (net
-      (code 47)
+      (code 48)
       (name "ETH_TX_N")
       (class "ETH_100,Default")
       (node
@@ -7840,7 +8082,7 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R53")
+        (ref "R54")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7848,7 +8090,7 @@
         (pin "20")
         (pintype "PASSIVE")))
     (net
-      (code 48)
+      (code 49)
       (name "ETH_TX_P")
       (class "ETH_100,Default")
       (node
@@ -7856,7 +8098,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R52")
+        (ref "R53")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7864,7 +8106,7 @@
         (pin "21")
         (pintype "PASSIVE")))
     (net
-      (code 49)
+      (code 50)
       (name "FAN_5V")
       (class "POWER,Default")
       (node
@@ -7880,11 +8122,11 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R87")
+        (ref "R88")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 50)
+      (code 51)
       (name "FAN_EN")
       (class "Default")
       (node
@@ -7892,7 +8134,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R89")
+        (ref "R90")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7900,7 +8142,7 @@
         (pin "12")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 51)
+      (code 52)
       (name "FAN_HS_G")
       (class "Default")
       (node
@@ -7912,15 +8154,15 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R88")
+        (ref "R89")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 52)
+      (code 53)
       (name "FAN_PWM")
       (class "Default")
       (node
-        (ref "R85")
+        (ref "R86")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -7928,7 +8170,7 @@
         (pin "10")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 53)
+      (code 54)
       (name "FAN_PWM_G")
       (class "Default")
       (node
@@ -7936,15 +8178,15 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R85")
+        (ref "R86")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R86")
+        (ref "R87")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 54)
+      (code 55)
       (name "FAN_PWM_OD")
       (class "Default")
       (node
@@ -7956,15 +8198,15 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R87")
+        (ref "R88")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 55)
+      (code 56)
       (name "FAN_TACH")
       (class "Default")
       (node
-        (ref "R91")
+        (ref "R92")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -7972,7 +8214,7 @@
         (pin "11")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 56)
+      (code 57)
       (name "FAN_TACH_RAW")
       (class "Default")
       (node
@@ -7980,19 +8222,19 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R90")
+        (ref "R91")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R91")
+        (ref "R92")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 57)
+      (code 58)
       (name "FLASH_CK")
       (class "SE_50,Default")
       (node
-        (ref "R16")
+        (ref "R17")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8000,11 +8242,11 @@
         (pin "32")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 58)
+      (code 59)
       (name "FLASH_CK_M")
       (class "SE_50,Default")
       (node
-        (ref "R16")
+        (ref "R17")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8012,11 +8254,11 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 59)
+      (code 60)
       (name "FLASH_CS")
       (class "SE_50,Default")
       (node
-        (ref "R12")
+        (ref "R13")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8024,15 +8266,15 @@
         (pin "27")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 60)
+      (code 61)
       (name "FLASH_CS_M")
       (class "SE_50,Default")
       (node
-        (ref "R12")
+        (ref "R13")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R18")
+        (ref "R19")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8040,11 +8282,11 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 61)
+      (code 62)
       (name "FLASH_D")
       (class "SE_50,Default")
       (node
-        (ref "R17")
+        (ref "R18")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8052,11 +8294,11 @@
         (pin "33")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 62)
+      (code 63)
       (name "FLASH_D_M")
       (class "SE_50,Default")
       (node
-        (ref "R17")
+        (ref "R18")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8064,11 +8306,11 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 63)
+      (code 64)
       (name "FLASH_HOLD")
       (class "SE_50,Default")
       (node
-        (ref "R15")
+        (ref "R16")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8076,11 +8318,11 @@
         (pin "31")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 64)
+      (code 65)
       (name "FLASH_HOLD_M")
       (class "SE_50,Default")
       (node
-        (ref "R15")
+        (ref "R16")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8088,11 +8330,11 @@
         (pin "7")
         (pintype "PASSIVE")))
     (net
-      (code 65)
+      (code 66)
       (name "FLASH_Q")
       (class "SE_50,Default")
       (node
-        (ref "R13")
+        (ref "R14")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8100,11 +8342,11 @@
         (pin "28")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 66)
+      (code 67)
       (name "FLASH_Q_M")
       (class "SE_50,Default")
       (node
-        (ref "R13")
+        (ref "R14")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8112,11 +8354,11 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 67)
+      (code 68)
       (name "FLASH_WP")
       (class "SE_50,Default")
       (node
-        (ref "R14")
+        (ref "R15")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -8124,11 +8366,11 @@
         (pin "29")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 68)
+      (code 69)
       (name "FLASH_WP_M")
       (class "SE_50,Default")
       (node
-        (ref "R14")
+        (ref "R15")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8136,7 +8378,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 69)
+      (code 70)
       (name "GND")
       (class "Default")
       (node
@@ -8468,6 +8710,14 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "C85")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "C86")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "C9")
         (pin "2")
         (pintype "PASSIVE"))
@@ -8620,6 +8870,14 @@
         (pin "MP")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "3")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J9")
+        (pin "4")
+        (pintype "PASSIVE"))
+      (node
         (ref "J_CAM")
         (pin "1")
         (pintype "PASSIVE"))
@@ -8692,15 +8950,15 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R20")
+        (ref "R10")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R22")
+        (ref "R21")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R25")
+        (ref "R23")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8708,7 +8966,7 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R29")
+        (ref "R27")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8716,11 +8974,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R32")
+        (ref "R31")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R36")
+        (ref "R33")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8728,11 +8986,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R4")
+        (ref "R38")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R47")
+        (ref "R4")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8748,15 +9006,19 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R69")
+        (ref "R50")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R86")
+        (ref "R70")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R9")
+        (ref "R87")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R95")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -8864,7 +9126,7 @@
         (pin "4")
         (pintype "PASSIVE")))
     (net
-      (code 70)
+      (code 71)
       (name "GPIO0")
       (class "Default")
       (node
@@ -8876,7 +9138,7 @@
         (pin "104")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 71)
+      (code 72)
       (name "GPIO1")
       (class "Default")
       (node
@@ -8888,7 +9150,7 @@
         (pin "1")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 72)
+      (code 73)
       (name "GPIO16")
       (class "Default")
       (node
@@ -8896,11 +9158,15 @@
         (pin "15")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "12")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "17")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 73)
+      (code 74)
       (name "GPIO17")
       (class "Default")
       (node
@@ -8908,11 +9174,15 @@
         (pin "16")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "13")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "18")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 74)
+      (code 75)
       (name "GPIO18")
       (class "Default")
       (node
@@ -8920,11 +9190,19 @@
         (pin "17")
         (pintype "PASSIVE"))
       (node
+        (ref "Q6")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R95")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "19")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 75)
+      (code 76)
       (name "GPIO19")
       (class "Default")
       (node
@@ -8932,11 +9210,15 @@
         (pin "18")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "14")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "20")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 76)
+      (code 77)
       (name "GPIO2")
       (class "Default")
       (node
@@ -8948,7 +9230,7 @@
         (pin "2")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 77)
+      (code 78)
       (name "GPIO22")
       (class "Default")
       (node
@@ -8956,11 +9238,15 @@
         (pin "19")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "7")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "24")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 78)
+      (code 79)
       (name "GPIO23")
       (class "Default")
       (node
@@ -8968,11 +9254,15 @@
         (pin "20")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "8")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "25")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 79)
+      (code 80)
       (name "GPIO3")
       (class "Default")
       (node
@@ -8984,7 +9274,7 @@
         (pin "3")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 80)
+      (code 81)
       (name "GPIO32")
       (class "Default")
       (node
@@ -8992,11 +9282,15 @@
         (pin "21")
         (pintype "PASSIVE"))
       (node
+        (ref "R94")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "63")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 81)
+      (code 82)
       (name "GPIO33")
       (class "Default")
       (node
@@ -9004,11 +9298,15 @@
         (pin "22")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "6")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "64")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 82)
+      (code 83)
       (name "GPIO4")
       (class "Default")
       (node
@@ -9020,7 +9318,7 @@
         (pin "4")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 83)
+      (code 84)
       (name "GPIO5")
       (class "Default")
       (node
@@ -9032,7 +9330,7 @@
         (pin "5")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 84)
+      (code 85)
       (name "GPIO53")
       (class "Default")
       (node
@@ -9040,11 +9338,15 @@
         (pin "23")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "9")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "97")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 85)
+      (code 86)
       (name "GPIO54")
       (class "Default")
       (node
@@ -9052,11 +9354,15 @@
         (pin "24")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "10")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "98")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 86)
+      (code 87)
       (name "HP_SW")
       (class "POWER,Default")
       (node
@@ -9068,7 +9374,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 87)
+      (code 88)
       (name "I2C_SCL")
       (class "Default")
       (node
@@ -9076,6 +9382,10 @@
         (pin "12")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "16")
+        (pintype "PASSIVE"))
+      (node
         (ref "J_CAM")
         (pin "20")
         (pintype "PASSIVE"))
@@ -9084,7 +9394,7 @@
         (pin "20")
         (pintype "PASSIVE"))
       (node
-        (ref "R84")
+        (ref "R85")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9092,12 +9402,16 @@
         (pin "8")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 88)
+      (code 89)
       (name "I2C_SDA")
       (class "Default")
       (node
         (ref "J6")
         (pin "11")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J9")
+        (pin "15")
         (pintype "PASSIVE"))
       (node
         (ref "J_CAM")
@@ -9108,7 +9422,7 @@
         (pin "21")
         (pintype "PASSIVE"))
       (node
-        (ref "R83")
+        (ref "R84")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9116,7 +9430,7 @@
         (pin "7")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 89)
+      (code 90)
       (name "J1_CC1")
       (class "Default")
       (node
@@ -9124,11 +9438,11 @@
         (pin "A5")
         (pintype "PASSIVE"))
       (node
-        (ref "R25")
+        (ref "R26")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 90)
+      (code 91)
       (name "J1_CC2")
       (class "Default")
       (node
@@ -9136,11 +9450,11 @@
         (pin "B5")
         (pintype "PASSIVE"))
       (node
-        (ref "R26")
+        (ref "R27")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 91)
+      (code 92)
       (name "J2_CC1")
       (class "Default")
       (node
@@ -9148,11 +9462,11 @@
         (pin "A5")
         (pintype "PASSIVE"))
       (node
-        (ref "R29")
+        (ref "R30")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 92)
+      (code 93)
       (name "J2_CC2")
       (class "Default")
       (node
@@ -9160,11 +9474,11 @@
         (pin "B5")
         (pintype "PASSIVE"))
       (node
-        (ref "R30")
+        (ref "R31")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 93)
+      (code 94)
       (name "J3_CC1")
       (class "Default")
       (node
@@ -9172,11 +9486,11 @@
         (pin "A5")
         (pintype "PASSIVE"))
       (node
-        (ref "R36")
+        (ref "R37")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 94)
+      (code 95)
       (name "J3_CC2")
       (class "Default")
       (node
@@ -9184,11 +9498,11 @@
         (pin "B5")
         (pintype "PASSIVE"))
       (node
-        (ref "R37")
+        (ref "R38")
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 95)
+      (code 96)
       (name "LCD_BL_PWM")
       (class "Default")
       (node
@@ -9200,7 +9514,7 @@
         (pin "55")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 96)
+      (code 97)
       (name "LCD_RST")
       (class "Default")
       (node
@@ -9212,7 +9526,39 @@
         (pin "56")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 97)
+      (code 98)
+      (name "LCD_SPI_BL")
+      (class "Default")
+      (node
+        (ref "C86")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J9")
+        (pin "11")
+        (pintype "PASSIVE"))
+      (node
+        (ref "Q6")
+        (pin "3")
+        (pintype "PASSIVE")))
+    (net
+      (code 99)
+      (name "LCD_SPI_SCK")
+      (class "Default")
+      (node
+        (ref "C85")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "J9")
+        (pin "5")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R94")
+        (pin "2")
+        (pintype "PASSIVE")))
+    (net
+      (code 100)
       (name "LED_PWR_A")
       (class "Default")
       (node
@@ -9220,15 +9566,15 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R24")
+        (ref "R25")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 98)
+      (code 101)
       (name "LED_STATUS")
       (class "Default")
       (node
-        (ref "R92")
+        (ref "R93")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9236,7 +9582,7 @@
         (pin "6")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 99)
+      (code 102)
       (name "LED_STATUS_A")
       (class "Default")
       (node
@@ -9244,11 +9590,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R92")
+        (ref "R93")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 100)
+      (code 103)
       (name "LP_UART_RXD")
       (class "Default")
       (node
@@ -9260,7 +9606,7 @@
         (pin "16")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 101)
+      (code 104)
       (name "LP_UART_TXD")
       (class "Default")
       (node
@@ -9272,7 +9618,7 @@
         (pin "15")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 102)
+      (code 105)
       (name "PHY_AVDD")
       (class "Default")
       (node
@@ -9300,10 +9646,6 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R52")
-        (pin "2")
-        (pintype "PASSIVE"))
-      (node
         (ref "R53")
         (pin "2")
         (pintype "PASSIVE"))
@@ -9316,6 +9658,10 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "R56")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "U5")
         (pin "1")
         (pintype "PASSIVE"))
@@ -9324,11 +9670,11 @@
         (pin "19")
         (pintype "PASSIVE")))
     (net
-      (code 103)
+      (code 106)
       (name "PHY_LED1")
       (class "Default")
       (node
-        (ref "R56")
+        (ref "R57")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9336,15 +9682,15 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 104)
+      (code 107)
       (name "PHY_LED2")
       (class "Default")
       (node
-        (ref "R48")
+        (ref "R49")
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R57")
+        (ref "R58")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9352,11 +9698,11 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 105)
+      (code 108)
       (name "PHY_RBIAS")
       (class "Default")
       (node
-        (ref "R47")
+        (ref "R48")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9364,11 +9710,11 @@
         (pin "24")
         (pintype "PASSIVE")))
     (net
-      (code 106)
+      (code 109)
       (name "PHY_RXER")
       (class "Default")
       (node
-        (ref "R49")
+        (ref "R50")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9376,7 +9722,7 @@
         (pin "10")
         (pintype "PASSIVE")))
     (net
-      (code 107)
+      (code 110)
       (name "PHY_VDDCR")
       (class "Default")
       (node
@@ -9392,7 +9738,7 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 108)
+      (code 111)
       (name "PHY_XI")
       (class "Default")
       (node
@@ -9408,7 +9754,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 109)
+      (code 112)
       (name "PHY_XO")
       (class "Default")
       (node
@@ -9424,7 +9770,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 110)
+      (code 113)
       (name "Q1_B1")
       (class "Default")
       (node
@@ -9432,11 +9778,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R34")
+        (ref "R35")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 111)
+      (code 114)
       (name "Q1_B2")
       (class "Default")
       (node
@@ -9444,15 +9790,15 @@
         (pin "5")
         (pintype "PASSIVE"))
       (node
-        (ref "R35")
+        (ref "R36")
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 112)
+      (code 115)
       (name "RMII_CRS_DV")
       (class "SE_50,Default")
       (node
-        (ref "R45")
+        (ref "R46")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9460,11 +9806,11 @@
         (pin "57")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 113)
+      (code 116)
       (name "RMII_CRS_DV_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R45")
+        (ref "R46")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9472,11 +9818,11 @@
         (pin "11")
         (pintype "PASSIVE")))
     (net
-      (code 114)
+      (code 117)
       (name "RMII_REF_CLK")
       (class "SE_50,Default")
       (node
-        (ref "R46")
+        (ref "R47")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9484,11 +9830,11 @@
         (pin "93")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 115)
+      (code 118)
       (name "RMII_REF_CLK_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R46")
+        (ref "R47")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9496,11 +9842,11 @@
         (pin "14")
         (pintype "PASSIVE")))
     (net
-      (code 116)
+      (code 119)
       (name "RMII_RXD0")
       (class "SE_50,Default")
       (node
-        (ref "R43")
+        (ref "R44")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9508,11 +9854,11 @@
         (pin "58")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 117)
+      (code 120)
       (name "RMII_RXD0_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R43")
+        (ref "R44")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9520,11 +9866,11 @@
         (pin "8")
         (pintype "PASSIVE")))
     (net
-      (code 118)
+      (code 121)
       (name "RMII_RXD1")
       (class "SE_50,Default")
       (node
-        (ref "R44")
+        (ref "R45")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9532,11 +9878,11 @@
         (pin "60")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 119)
+      (code 122)
       (name "RMII_RXD1_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R44")
+        (ref "R45")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9544,11 +9890,11 @@
         (pin "7")
         (pintype "PASSIVE")))
     (net
-      (code 120)
+      (code 123)
       (name "RMII_TXD0")
       (class "SE_50,Default")
       (node
-        (ref "R40")
+        (ref "R41")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9556,11 +9902,11 @@
         (pin "65")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 121)
+      (code 124)
       (name "RMII_TXD0_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R40")
+        (ref "R41")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9568,15 +9914,11 @@
         (pin "17")
         (pintype "PASSIVE")))
     (net
-      (code 122)
+      (code 125)
       (name "RMII_TXD1")
       (class "SE_50,Default")
       (node
-        (ref "Q1")
-        (pin "3")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R41")
+        (ref "R42")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9584,7 +9926,7 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "SW2")
+        (ref "R9")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9592,11 +9934,11 @@
         (pin "66")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 123)
+      (code 126)
       (name "RMII_TXD1_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R41")
+        (ref "R42")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9604,11 +9946,11 @@
         (pin "18")
         (pintype "PASSIVE")))
     (net
-      (code 124)
+      (code 127)
       (name "RMII_TX_EN")
       (class "SE_50,Default")
       (node
-        (ref "R42")
+        (ref "R43")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9616,11 +9958,11 @@
         (pin "92")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 125)
+      (code 128)
       (name "RMII_TX_EN_PHY")
       (class "SE_50,Default")
       (node
-        (ref "R42")
+        (ref "R43")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9628,11 +9970,11 @@
         (pin "16")
         (pintype "PASSIVE")))
     (net
-      (code 126)
+      (code 129)
       (name "SD_CLK")
       (class "SE_50,Default")
       (node
-        (ref "R62")
+        (ref "R63")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9640,7 +9982,7 @@
         (pin "84")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 127)
+      (code 130)
       (name "SD_CLK_C")
       (class "SE_50,Default")
       (node
@@ -9652,7 +9994,7 @@
         (pin "5")
         (pintype "PASSIVE"))
       (node
-        (ref "R62")
+        (ref "R63")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9664,11 +10006,11 @@
         (pin "10")
         (pintype "PASSIVE")))
     (net
-      (code 128)
+      (code 131)
       (name "SD_CMD")
       (class "SE_50,Default")
       (node
-        (ref "R63")
+        (ref "R64")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9676,7 +10018,7 @@
         (pin "86")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 129)
+      (code 132)
       (name "SD_CMD_C")
       (class "SE_50,Default")
       (node
@@ -9684,11 +10026,11 @@
         (pin "3")
         (pintype "PASSIVE"))
       (node
-        (ref "R63")
+        (ref "R64")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R68")
+        (ref "R69")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9700,44 +10042,8 @@
         (pin "9")
         (pintype "PASSIVE")))
     (net
-      (code 130)
+      (code 133)
       (name "SD_D0")
-      (class "SE_50,Default")
-      (node
-        (ref "R58")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U1")
-        (pin "80")
-        (pintype "BIDIRECTIONAL")))
-    (net
-      (code 131)
-      (name "SD_D0_C")
-      (class "SE_50,Default")
-      (node
-        (ref "J5")
-        (pin "7")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R58")
-        (pin "2")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R64")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U10")
-        (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "U10")
-        (pin "10")
-        (pintype "PASSIVE")))
-    (net
-      (code 132)
-      (name "SD_D1")
       (class "SE_50,Default")
       (node
         (ref "R59")
@@ -9745,15 +10051,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U1")
-        (pin "81")
+        (pin "80")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 133)
-      (name "SD_D1_C")
+      (code 134)
+      (name "SD_D0_C")
       (class "SE_50,Default")
       (node
         (ref "J5")
-        (pin "8")
+        (pin "7")
         (pintype "PASSIVE"))
       (node
         (ref "R59")
@@ -9765,15 +10071,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U10")
-        (pin "2")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "U10")
-        (pin "9")
+        (pin "10")
         (pintype "PASSIVE")))
     (net
-      (code 134)
-      (name "SD_D2")
+      (code 135)
+      (name "SD_D1")
       (class "SE_50,Default")
       (node
         (ref "R60")
@@ -9781,15 +10087,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U1")
-        (pin "82")
+        (pin "81")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 135)
-      (name "SD_D2_C")
+      (code 136)
+      (name "SD_D1_C")
       (class "SE_50,Default")
       (node
         (ref "J5")
-        (pin "1")
+        (pin "8")
         (pintype "PASSIVE"))
       (node
         (ref "R60")
@@ -9801,15 +10107,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U10")
-        (pin "4")
+        (pin "2")
         (pintype "PASSIVE"))
       (node
         (ref "U10")
-        (pin "7")
+        (pin "9")
         (pintype "PASSIVE")))
     (net
-      (code 136)
-      (name "SD_D3")
+      (code 137)
+      (name "SD_D2")
       (class "SE_50,Default")
       (node
         (ref "R61")
@@ -9817,15 +10123,15 @@
         (pintype "PASSIVE"))
       (node
         (ref "U1")
-        (pin "83")
+        (pin "82")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 137)
-      (name "SD_D3_C")
+      (code 138)
+      (name "SD_D2_C")
       (class "SE_50,Default")
       (node
         (ref "J5")
-        (pin "2")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
         (ref "R61")
@@ -9837,6 +10143,42 @@
         (pintype "PASSIVE"))
       (node
         (ref "U10")
+        (pin "4")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U10")
+        (pin "7")
+        (pintype "PASSIVE")))
+    (net
+      (code 139)
+      (name "SD_D3")
+      (class "SE_50,Default")
+      (node
+        (ref "R62")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U1")
+        (pin "83")
+        (pintype "BIDIRECTIONAL")))
+    (net
+      (code 140)
+      (name "SD_D3_C")
+      (class "SE_50,Default")
+      (node
+        (ref "J5")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R62")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
+        (ref "R68")
+        (pin "1")
+        (pintype "PASSIVE"))
+      (node
+        (ref "U10")
         (pin "5")
         (pintype "PASSIVE"))
       (node
@@ -9844,7 +10186,7 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 138)
+      (code 141)
       (name "SD_DET")
       (class "Default")
       (node
@@ -9852,7 +10194,7 @@
         (pin "10")
         (pintype "PASSIVE"))
       (node
-        (ref "R70")
+        (ref "R71")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -9868,7 +10210,7 @@
         (pin "7")
         (pintype "PASSIVE")))
     (net
-      (code 139)
+      (code 142)
       (name "SD_PWR_EN")
       (class "Default")
       (node
@@ -9876,7 +10218,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R69")
+        (ref "R70")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9884,7 +10226,7 @@
         (pin "22")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 140)
+      (code 143)
       (name "SD_VDD")
       (class "POWER,Default")
       (node
@@ -9904,7 +10246,7 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 141)
+      (code 144)
       (name "STRAP_GPIO36")
       (class "Default")
       (node
@@ -9916,7 +10258,7 @@
         (pin "68")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 142)
+      (code 145)
       (name "UART0_RXD")
       (class "Default")
       (node
@@ -9928,7 +10270,7 @@
         (pin "21")
         (pintype "PASSIVE")))
     (net
-      (code 143)
+      (code 146)
       (name "UART0_TXD")
       (class "Default")
       (node
@@ -9940,7 +10282,7 @@
         (pin "20")
         (pintype "PASSIVE")))
     (net
-      (code 144)
+      (code 147)
       (name "USB1_DM")
       (class "USB_90,Default")
       (node
@@ -9952,7 +10294,7 @@
         (pin "B7")
         (pintype "PASSIVE"))
       (node
-        (ref "R28")
+        (ref "R29")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9960,7 +10302,7 @@
         (pin "2")
         (pintype "PASSIVE")))
     (net
-      (code 145)
+      (code 148)
       (name "USB1_DP")
       (class "USB_90,Default")
       (node
@@ -9972,7 +10314,7 @@
         (pin "B6")
         (pintype "PASSIVE"))
       (node
-        (ref "R27")
+        (ref "R28")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -9980,7 +10322,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 146)
+      (code 149)
       (name "USB2_DM")
       (class "USB_90,Default")
       (node
@@ -10004,7 +10346,7 @@
         (pin "4")
         (pintype "PASSIVE")))
     (net
-      (code 147)
+      (code 150)
       (name "USB2_DP")
       (class "USB_90,Default")
       (node
@@ -10028,7 +10370,7 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 148)
+      (code 151)
       (name "USB3_DM")
       (class "USB_90,Default")
       (node
@@ -10040,7 +10382,7 @@
         (pin "B7")
         (pintype "PASSIVE"))
       (node
-        (ref "R39")
+        (ref "R40")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10052,7 +10394,7 @@
         (pin "4")
         (pintype "PASSIVE")))
     (net
-      (code 149)
+      (code 152)
       (name "USB3_DP")
       (class "USB_90,Default")
       (node
@@ -10064,7 +10406,7 @@
         (pin "B6")
         (pintype "PASSIVE"))
       (node
-        (ref "R38")
+        (ref "R39")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10076,11 +10418,11 @@
         (pin "6")
         (pintype "PASSIVE")))
     (net
-      (code 150)
+      (code 153)
       (name "USBHS_DM")
       (class "USB_90,Default")
       (node
-        (ref "R28")
+        (ref "R29")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -10088,27 +10430,27 @@
         (pin "49")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 151)
+      (code 154)
       (name "USBHS_DP")
       (class "USB_90,Default")
       (node
-        (ref "R27")
-        (pin "2")
+        (ref "R10")
+        (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R9")
-        (pin "1")
+        (ref "R28")
+        (pin "2")
         (pintype "PASSIVE"))
       (node
         (ref "U1")
         (pin "50")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 152)
+      (code 155)
       (name "USJ_DM")
       (class "USB_90,Default")
       (node
-        (ref "R39")
+        (ref "R40")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -10116,11 +10458,11 @@
         (pin "52")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 153)
+      (code 156)
       (name "USJ_DP")
       (class "USB_90,Default")
       (node
-        (ref "R38")
+        (ref "R39")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -10128,7 +10470,7 @@
         (pin "53")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 154)
+      (code 157)
       (name "VBUS1")
       (class "POWER,Default")
       (node
@@ -10156,7 +10498,7 @@
         (pin "B9")
         (pintype "PASSIVE")))
     (net
-      (code 155)
+      (code 158)
       (name "VBUS2")
       (class "POWER,Default")
       (node
@@ -10184,7 +10526,7 @@
         (pin "B9")
         (pintype "PASSIVE"))
       (node
-        (ref "R31")
+        (ref "R32")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10192,7 +10534,7 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 156)
+      (code 159)
       (name "VBUS3")
       (class "POWER,Default")
       (node
@@ -10224,7 +10566,7 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 157)
+      (code 160)
       (name "VDDO_4_SDIO")
       (class "Default")
       (node
@@ -10234,10 +10576,6 @@
       (node
         (ref "C34")
         (pin "1")
-        (pintype "PASSIVE"))
-      (node
-        (ref "R64")
-        (pin "2")
         (pintype "PASSIVE"))
       (node
         (ref "R65")
@@ -10256,6 +10594,10 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
+        (ref "R69")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "U1")
         (pin "74")
         (pintype "POWER-OUT"))
@@ -10264,7 +10606,7 @@
         (pin "85")
         (pintype "POWER-IN")))
     (net
-      (code 158)
+      (code 161)
       (name "VDDO_FLASH")
       (class "Default")
       (node
@@ -10284,7 +10626,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R18")
+        (ref "R19")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10300,7 +10642,7 @@
         (pin "8")
         (pintype "PASSIVE")))
     (net
-      (code 159)
+      (code 162)
       (name "VDDO_PSRAM")
       (class "Default")
       (node
@@ -10336,7 +10678,7 @@
         (pin "72")
         (pintype "POWER-OUT")))
     (net
-      (code 160)
+      (code 163)
       (name "VDD_BAT")
       (class "Default")
       (node
@@ -10356,7 +10698,7 @@
         (pin "102")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 161)
+      (code 164)
       (name "VDD_HP")
       (class "POWER,Default")
       (node
@@ -10404,7 +10746,7 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R19")
+        (ref "R20")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10424,7 +10766,7 @@
         (pin "91")
         (pintype "POWER-IN")))
     (net
-      (code 162)
+      (code 165)
       (name "VDD_HP1_PAD")
       (class "POWER,Default")
       (node
@@ -10444,7 +10786,7 @@
         (pin "54")
         (pintype "POWER-IN")))
     (net
-      (code 163)
+      (code 166)
       (name "VDD_HP_EN")
       (class "Default")
       (node
@@ -10456,7 +10798,7 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 164)
+      (code 167)
       (name "VDD_HP_FB")
       (class "Default")
       (node
@@ -10464,11 +10806,11 @@
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R19")
+        (ref "R20")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R20")
+        (ref "R21")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10480,7 +10822,7 @@
         (pin "5")
         (pintype "PASSIVE")))
     (net
-      (code 165)
+      (code 168)
       (name "VDD_MIPI_PHY")
       (class "Default")
       (node
@@ -10508,7 +10850,7 @@
         (pin "73")
         (pintype "POWER-OUT")))
     (net
-      (code 166)
+      (code 169)
       (name "VDD_USBPHY")
       (class "Default")
       (node
@@ -10532,7 +10874,7 @@
         (pin "51")
         (pintype "POWER-IN")))
     (net
-      (code 167)
+      (code 170)
       (name "VSYS_5V")
       (class "POWER,Default")
       (node
@@ -10564,11 +10906,15 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
+        (ref "J9")
+        (pin "2")
+        (pintype "PASSIVE"))
+      (node
         (ref "Q4")
         (pin "2")
         (pintype "PASSIVE"))
       (node
-        (ref "R88")
+        (ref "R89")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10588,7 +10934,7 @@
         (pin "13")
         (pintype "PASSIVE")))
     (net
-      (code 168)
+      (code 171)
       (name "VSYS_OR")
       (class "POWER,Default")
       (node
@@ -10608,11 +10954,11 @@
         (pin "1")
         (pintype "PASSIVE")))
     (net
-      (code 169)
+      (code 172)
       (name "XTAL_N")
       (class "SE_50,Default")
       (node
-        (ref "R11")
+        (ref "R12")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10620,7 +10966,7 @@
         (pin "99")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 170)
+      (code 173)
       (name "XTAL_N_Y")
       (class "SE_50,Default")
       (node
@@ -10628,7 +10974,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R11")
+        (ref "R12")
         (pin "2")
         (pintype "PASSIVE"))
       (node
@@ -10636,11 +10982,11 @@
         (pin "3")
         (pintype "PASSIVE")))
     (net
-      (code 171)
+      (code 174)
       (name "XTAL_P")
       (class "SE_50,Default")
       (node
-        (ref "R10")
+        (ref "R11")
         (pin "1")
         (pintype "PASSIVE"))
       (node
@@ -10648,7 +10994,7 @@
         (pin "100")
         (pintype "BIDIRECTIONAL")))
     (net
-      (code 172)
+      (code 175)
       (name "XTAL_P_Y")
       (class "SE_50,Default")
       (node
@@ -10656,7 +11002,7 @@
         (pin "1")
         (pintype "PASSIVE"))
       (node
-        (ref "R10")
+        (ref "R11")
         (pin "2")
         (pintype "PASSIVE"))
       (node
