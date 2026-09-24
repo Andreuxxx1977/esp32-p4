@@ -1,0 +1,4 @@
+# Python tools to regenerate and check the design (Python >= 3.10).
+# Install with: pip install --use-pep517 -r requirements.txt
+skidl==2.3.0
+pytest>=8

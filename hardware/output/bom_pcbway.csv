@@ -1,0 +1,67 @@
+Item #,Designator,Quantity,Value/Name,Package/Footprint,Manufacturer Part Number (MPN),Manufacturer,Description,Mount (SMD/THT),LCSC #,Assembly note
+1,"C1, C3, C4, C7, C10, C13, C15, C17, C19, C21, C27, C29, C32, C34, C35, C37, C39, C40, C45, C52, C60, C62, C64, C70, C71, C72, C75, C79, C81, C83, C86",31,100nF,0402 [C_0402_1005Metric],CL05B104KO5NNNC,Samsung Electro-Mechanics,MLCC 100nF 16V X7R,SMD,C1525,
+2,"C2, C6, C28, C31, C33, C41",6,10uF,0402 [C_0402_1005Metric],CL05A106MQ5NUNC,Samsung Electro-Mechanics,MLCC 10uF 6.3V X5R,SMD,C15525,
+3,"C5, C8, C11, C16, C18, C20, C22, C23, C24, C25, C26, C30, C36, C42, C61, C63, C68, C69, C73, C80, C82",21,1uF,0402 [C_0402_1005Metric],CL05A105KA5NQNC,Samsung Electro-Mechanics,MLCC 1uF 25V X5R,SMD,C52923,
+4,"C9, C12, C38, C76",4,10nF,0402 [C_0402_1005Metric],CL05B103KB5NNNC,Samsung Electro-Mechanics,MLCC 10nF 50V X7R,SMD,C15195,
+5,"C14, C46",2,4.7uF,0402 [C_0402_1005Metric],CL05A475MP5NRNC,Samsung Electro-Mechanics,MLCC 4.7uF 10V X5R,SMD,C23733,
+6,"C43, C44",2,12pF,0402 [C_0402_1005Metric],CL05C120JB5NNNC,Samsung Electro-Mechanics,MLCC 12pF 50V C0G,SMD,,no LCSC number
+7,"C47, C53, C54",3,22uF,0805 [C_0805_2012Metric],CL21A226MQQNNNE,Samsung Electro-Mechanics,MLCC 22uF 6.3V X5R,SMD,C5674,
+8,C48,1,22pF,0402 [C_0402_1005Metric],CL05C220JB5NNNC,Samsung Electro-Mechanics,MLCC 22pF 50V C0G,SMD,C70464,
+9,"C49, C50, C51, C58, C59, C65, C78, C84",8,10uF,0805 [C_0805_2012Metric],CL21A106KAYNNNE,Samsung Electro-Mechanics,MLCC 10uF 25V X5R,SMD,C15850,
+10,"C55, C56",2,47uF,0805 [C_0805_2012Metric],CL21A476MQYNNNE,Samsung Electro-Mechanics,MLCC 47uF 6.3V X5R,SMD,C16780,
+11,C57,1,3.3nF,0402 [C_0402_1005Metric],CL05B332KB5NNNC,Samsung Electro-Mechanics,MLCC 3.3nF 50V X7R,SMD,C26404,
+12,"C66, C67",2,18pF,0402 [C_0402_1005Metric],CL05C180JB5NNNC,Samsung Electro-Mechanics,MLCC 18pF 50V C0G,SMD,C307443,
+13,C74,1,470pF,0402 [C_0402_1005Metric],CL05B471KB5NNNC,Samsung Electro-Mechanics,MLCC 470pF 50V X7R,SMD,C26412,
+14,"D1, D2, D3",3,PMEG4050EP,SOD-128 [D_SOD-128],"PMEG4050EP,115",Nexperia,40 V 5 A low-VF Schottky (~0.4 V @ 2.5 A) -- VBUS OR-ing,SMD,C96235,
+15,D4,1,Green,0603 [LED_0603_1608Metric],150060GS75000,Wurth Elektronik,Green LED,SMD,C5252984,
+16,D5,1,Red,0603 [LED_0603_1608Metric],150060RS75000,Wurth Elektronik,Red LED,SMD,C3030991,
+17,F1,1,PTC 2.5A,1812 [Fuse_1812_4532Metric],MF-MSMF250/16X-2,Bourns,"Resettable fuse, 2.5 A hold / 5 A trip, 16 V, on VSYS",SMD,C210838,
+18,"FB1, FB2",2,220R@100MHz,0603 [L_0603_1608Metric],BLM18PG221SN1D,Murata,"Ferrite bead 220 ohm, 1.4 A",SMD,C80165,
+19,"J1, J2, J3",3,USB-C,"USB Type-C 16P, top-mount [USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal]",USB4105-GF-A,GCT,"USB 2.0 Type-C receptacle (UFP, 5.1k Rd); SMD contacts + 4 THT shell legs",SMD,C3020560,SMD with THT legs (paste-in-hole / hand-solder the legs)
+20,J4,1,RJ45 MagJack,"RJ45 THT, integrated magnetics + 2 LEDs [RJ45_Hanrun_HR911105A_Horizontal]",HR911105A,HanRun,"RJ45 with 10/100 magnetics (1:1, CT) and green/yellow LEDs",THT,C12074,"THT, top side"
+21,J5,1,microSD,"microSD push-push, SMT [microSD_HC_Hirose_DM3AT-SF-PEJM5]",DM3AT-SF-PEJM5,Hirose,microSD socket with card-detect switch,SMD,C114218,
+22,J6,1,2x12 header,2x12 2.54 mm THT [PinHeader_2x12_P2.54mm_Vertical],61302421121,Wurth Elektronik,2x12 expansion header,THT,,"THT, top side; no LCSC number"
+23,J7,1,Fan 4P,"2.54 mm 4-pin fan header, THT [FanPinHeader_1x04_P2.54mm_Vertical]",47053-1000,Molex,"Intel 4-wire PWM fan header (1 GND, 2 +V, 3 TACH, 4 PWM)",THT,C240840,"THT, top side"
+24,J8,1,JST-SH 2P,"JST SH 1.0 mm 2P, SMT [JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal]",SM02B-SRSS-TB(LF)(SN),JST,Display backlight 5 V feed,SMD,C160402,
+25,J9,1,2x8 header,2x8 2.54 mm THT [PinHeader_2x08_P2.54mm_Vertical],61301621121,Wurth Elektronik,2x8 SPI/I2C TFT display header (dupont-wire friendly),THT,,"THT, top side; no LCSC number"
+26,"J_CAM, J_DSI",2,FPC 22P 0.5mm,"FPC 22P 0.5 mm, top contact, horizontal, SMT [Amphenol_F32Q-1A7x1-11022_1x22-1MP_P0.5mm_Horizontal]",F32Q-1A7H1-11022,Amphenol ICC,"22-pin 0.5 mm FPC, same top-contact part as Raspberry Pi 5 -> standard Pi cables, no mirroring",SMD,C3169253,
+27,L1,1,2.2uH,5.3x5.5 mm shielded [L_Coilcraft_XAL5030-XXX],XAL5030-222MEC,Coilcraft,"2.2 uH, Isat 9.2 A, DCR 14.5 mOhm -- 3 A buck inductor",SMD,C920280,
+28,L2,1,2.2uH,2520 (1008) metal alloy [L_1008_2520Metric],DFE252012F-2R2M=P2,Murata,"2.2 uH, Isat 3.3 A, 82 mOhm -- VDD_HP buck inductor",SMD,C576403,
+29,Q1,1,MMDT3904,SOT-363 [SOT-363_SC-70-6],MMDT3904-7-F,Diodes Incorporated,Dual NPN for DTR/RTS auto-reset + boot-strap circuit,SMD,C83572,
+30,"Q2, Q4, Q6",3,AO3401A,SOT-23 [SOT-23],AO3401A,Alpha & Omega Semiconductor,-30 V -4 A P-MOSFET (high-side load switch),SMD,C15127,
+31,"Q3, Q5",2,AO3400A,SOT-23 [SOT-23],AO3400A,Alpha & Omega Semiconductor,30 V 5.7 A logic-level N-MOSFET (Vgs(th) 1.45 V max),SMD,C20917,
+32,"R1, R2, R3, R11, R12, R13, R14, R15, R16, R17, R18, R28, R29, R59, R60, R61, R62, R63, R64, R72, R73, R74, R75, R76, R77, R78, R79, R80, R81, R82, R83",31,0R,0402 [R_0402_1005Metric],RC0402JR-070RL,YAGEO,"Thick-film resistor, jumper",SMD,C60485,
+33,"R4, R5",2,4.02k,0402 [R_0402_1005Metric],RC0402FR-074K02L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+34,"R6, R7, R8, R19, R35, R36, R49, R50, R51, R70, R71, R90, R91",13,10k,0402 [R_0402_1005Metric],RC0402FR-0710KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,C60490,
+35,"R9, R25, R34, R92, R93",5,1k,0402 [R_0402_1005Metric],RC0402FR-071KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,C106235,
+36,"R20, R21",2,499k,0402 [R_0402_1005Metric],RC0402FR-07499KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+37,R22,1,75k,0402 [R_0402_1005Metric],RC0402FR-0775KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+38,R23,1,24k,0402 [R_0402_1005Metric],RC0402FR-0724KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+39,"R24, R87, R89, R95",4,100k,0402 [R_0402_1005Metric],RC0402FR-07100KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+40,"R26, R27, R30, R31, R37, R38",6,5.1k,0402 [R_0402_1005Metric],RC0402FR-075K1L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+41,R32,1,22.1k,0402 [R_0402_1005Metric],RC0402FR-0722K1L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+42,R33,1,47.5k,0402 [R_0402_1005Metric],RC0402FR-0747K5L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+43,"R39, R40, R41, R42, R43, R44, R45, R46, R94",9,22,0402 [R_0402_1005Metric],RC0402FR-0722RL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+44,R47,1,33,0402 [R_0402_1005Metric],RC0402FR-0733RL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+45,R48,1,12.1k,0402 [R_0402_1005Metric],RC0402FR-0712K1L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+46,R52,1,1.5k,0402 [R_0402_1005Metric],RC0402FR-071K5L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+47,"R53, R54, R55, R56",4,49.9,0402 [R_0402_1005Metric],RC0402FR-0749R9L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,C87044,
+48,"R57, R58",2,330,0402 [R_0402_1005Metric],RC0402FR-07330RL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+49,"R65, R66, R67, R68, R69",5,51k,0402 [R_0402_1005Metric],RC0402FR-0751KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+50,"R84, R85",2,2.2k,0402 [R_0402_1005Metric],RC0402FR-072K2L,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+51,R86,1,100,0402 [R_0402_1005Metric],RC0402FR-07100RL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,no LCSC number
+52,"SW1, SW2",2,Tactile,4.2x3.2 mm SMD [SW_SPST_PTS810],PTS810SJM250SMTRLFS,C&K,SMD tactile switch,SMD,C116501,
+53,U1,1,ESP32-P4NRW32X,"QFN-104 10x10 mm, 0.35 mm pitch, EPAD 7.5 mm [ESP32-P4]",ESP32-P4NRW32X,Espressif Systems,"Dual-core RISC-V 400 MHz SoC, 32 MB in-package PSRAM, chip rev v3.x",SMD,C54540373,EPAD on the capped via-in-pad array; fine pitch 0.35 mm
+54,U2,1,W25Q256JV 32MB,WSON-8 8x6 mm [WSON-8-1EP_8x6mm_P1.27mm_EP3.4x4.3mm],W25Q256JVEIQ,Winbond,"256 Mbit (32 MB) 3.3 V Quad-SPI NOR flash, 133 MHz, 4-byte addressing",SMD,C97522,
+55,U3,1,TPS62130,VQFN-16 3x3 mm [VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm_ThermalVias],TPS62130RGTR,Texas Instruments,"3-17 V in, 3 A synchronous buck (DCS-Control), 100 % mode, 5 V->3V3 main rail",SMD,C43590,
+56,U4,1,TLV62569,SOT-23-5 [SOT-23-5],TLV62569DBVR,Texas Instruments,"2 A buck, Espressif-verified external DCDC for ESP32-P4 VDD_HP (EN/FB driven by the SoC)",SMD,C141836,
+57,U5,1,LAN8720A,VQFN-24 4x4 mm [VQFN-24-1EP_4x4mm_P0.5mm_EP2.5x2.5mm_ThermalVias],LAN8720A-CP-TR,Microchip,"10/100 Ethernet RMII PHY, HP Auto-MDIX, ESP-IDF 'lan87xx' driver",SMD,C45223,
+58,U6,1,CP2102N,QFN-24 4x4 mm [QFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm],CP2102N-A02-GQFN24R,Silicon Labs,"USB 2.0 FS to UART bridge, 3 Mbaud, DTR/RTS for auto-program",SMD,C969151,
+59,U7,1,TPD2EUSB30,SOT-3 (DRT) 1.0x1.0 mm [Texas_DRT-3],TPD2EUSB30DRTR,Texas Instruments,2-channel ultra-low-capacitance ESD (0.7 pF typ) for USB 2.0 HS -- Espressif limit is 1 pF,SMD,C97502,
+60,"U8, U9",2,USBLC6-2SC6,SOT-23-6 [SOT-23-6],USBLC6-2SC6,STMicroelectronics,2-line USB ESD with VBUS clamp (3.5 pF max: full-speed ports only),SMD,C7519,
+61,"U10, U11",2,TPD4E05U06,USON-10 2.5x1.0 mm [USON-10_2.5x1.0mm_P0.5mm],TPD4E05U06DQAR,Texas Instruments,"4-channel 0.5 pF flow-through ESD array (microSD, UHS-I safe)",SMD,C138714,
+62,Y1,1,40MHz 10ppm,2016 4-pad [Crystal_SMD_2016-4Pin_2.0x1.6mm],402F4001XIAR,CTS,"40 MHz +/-10 ppm crystal, C_L 10 pF, ESR 60 ohm max, for ESP32-P4",SMD,C5508101,
+63,Y2,1,25MHz,3225 4-pad [Crystal_SMD_3225-4Pin_3.2x2.5mm],X322525MOB4SI,YXC,"25 MHz +/-10 ppm / +/-20 ppm stab., C_L 12 pF -- inside the +/-50 ppm 100BASE-TX budget",SMD,C9006,
+64,"C77, C85",2,10pF,0402 [C_0402_1005Metric],CL05C100CB5NNNC,Samsung Electro-Mechanics,MLCC 10pF 50V C0G,SMD,,DO NOT POPULATE; Espressif: reserve CLK cap for tuning; Optional CLK edge filter
+65,R10,1,1M,0402 [R_0402_1005Metric],RC0402FR-071ML,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,,"DO NOT POPULATE; Espressif rev1.x DP pull-down, DNP on rev v3.x"
+66,R88,1,10k,0402 [R_0402_1005Metric],RC0402FR-0710KL,YAGEO,"Thick-film resistor, 1 %, 1/16 W",SMD,C60490,DO NOT POPULATE; Only for fans without internal PWM pull-up

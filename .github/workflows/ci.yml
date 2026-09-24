@@ -1,0 +1,64 @@
+name: Design checks
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  design:
+    name: Spec, netlist, docs and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install tools
+        run: pip install --use-pep517 -r requirements.txt
+
+      - name: Validate the design data (pin conflicts, strapping, keep-outs)
+        run: python -m hardware.lib.board_spec
+
+      - name: Generated docs and BOM are up to date
+        run: python -m tools.gen_docs --check
+
+      - name: Committed netlist matches the spec
+        run: python -m hardware.skidl.verify_netlist
+
+      - name: Regenerate the netlist with SKiDL (ERC must be clean) and verify it
+        run: |
+          python -m hardware.skidl.esp32p4_extreme_netlist --out "$RUNNER_TEMP/net"
+          python -m hardware.skidl.verify_netlist \
+            --net "$RUNNER_TEMP/net/esp32p4_extreme.net" \
+            --csv "$RUNNER_TEMP/net/esp32p4_extreme_nets.csv"
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+  footprints:
+    name: Pads exist in the real KiCad footprints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/esp32p4-footprints
+          key: kicad-footprints-${{ hashFiles('hardware/lib/board_spec.py') }}
+          restore-keys: kicad-footprints-
+
+      - name: Cross-check every used pad against gitlab.com/kicad/libraries/kicad-footprints
+        run: python -m hardware.skidl.check_footprints
