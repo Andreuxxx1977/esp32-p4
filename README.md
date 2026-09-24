@@ -48,3 +48,23 @@ files, the ESP32-P4 hardware design guidelines and Espressif's KiCad library.
 | AO3400A fan MOSFET | AO3400A as **open-drain PWM driver** + AO3401A high-side switch | A 4-wire fan needs constant power with an open-drain PWM input (Intel spec). Chopping its ground breaks the tach and the fan's controller. The high-side switch adds a zero-RPM mode, and the fan runs at 100 % if the firmware hangs. |
 
 See `docs/TASK1_pinout.md` for the full GPIO map and the zero-conflict proof.
+
+## License
+
+Copyright (c) 2026 Andreuxxx1977.
+
+This source describes Open Hardware and is licensed under the CERN-OHL-S v2 (SPDX: `CERN-OHL-S-2.0`).
+The licence covers the design data, the scripts that generate the netlist, placement, BOM and docs, and
+their outputs. The full text is in [`LICENSE`](LICENSE).
+
+You may redistribute and modify this source and make products using it under the terms of the
+CERN-OHL-S v2 (https://ohwr.org/cern_ohl_s_v2.txt). This source is distributed WITHOUT ANY EXPRESS OR
+IMPLIED WARRANTY, INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY AND FITNESS FOR A PARTICULAR
+PURPOSE. Please see the CERN-OHL-S v2 for applicable conditions.
+
+Source location: https://github.com/Andreuxxx1977/esp32-p4
+
+As per CERN-OHL-S v2 section 4, should You produce hardware based on this source, You must where
+practicable maintain the Source Location visible on the external case of the product or other products
+you make using this source. It must also stay visible on the PCB silkscreen, which the placement script
+adds.
