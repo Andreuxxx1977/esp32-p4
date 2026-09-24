@@ -126,6 +126,51 @@ jobs:
           path: kicad-ci-output/
           if-no-files-found: warn
 
+  fab:
+    name: Routed board (DRC, same design as placed, Gerbers reproducible)
+    runs-on: ubuntu-latest
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    env:
+      PLACED: hardware/output/esp32p4_extreme.kicad_pcb
+      ROUTED: hardware/output/routed/esp32p4_extreme.kicad_pcb
+      OUT: kicad-fab-output
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Routed board present?
+        id: routed
+        run: |
+          mkdir -p "$OUT"
+          if [ -f "$ROUTED" ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$ROUTED not committed yet - skipping the fabrication checks"; fi
+
+      - name: Routed board = placed board + copper (footprints, positions, pad nets, zones)
+        if: steps.routed.outputs.exists == 'true'
+        run: python3 hardware/pcbnew/autoroute.py --board "$PLACED" --verify "$ROUTED"
+
+      - name: DRC of the routed board (fully connected, no manufacturing/electrical errors)
+        if: steps.routed.outputs.exists == 'true'
+        run: |
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output "$OUT/routed_drc.json" "$ROUTED"
+          python3 -m tools.check_drc_report "$OUT/routed_drc.json" --routed
+
+      - name: Committed Gerbers / drills / IPC-356 / pick-and-place match the routed board
+        if: steps.routed.outputs.exists == 'true'
+        run: |
+          python3 -m tools.export_fab "$ROUTED" --check
+          python3 -m tools.export_fab "$ROUTED" --out "$OUT/fab"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.routed.outputs.exists == 'true'
+        with:
+          name: fabrication-package
+          path: kicad-fab-output/
+          if-no-files-found: warn
+
   footprints:
     name: Pads exist in the real KiCad footprints
     runs-on: ubuntu-latest

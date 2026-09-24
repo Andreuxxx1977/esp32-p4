@@ -25,6 +25,36 @@ body is a representative 10 x 10 mm QFN (Espressif ships no 3D model).*
 > pantalla MIPI, USB-HS, Ethernet y microSD. Todos los archivos se generan desde un único modelo en
 > Python. Libre de usar citando este proyecto como original (ver [Licencia](#license-free-to-use-just-credit-the-original-project)).
 
+## How this project was made: about 95 % by an AI agent
+
+This board is an experiment in AI-driven hardware design. **Roughly 95 % of the work in this repository
+was done by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent**, working
+from a written brief. It did the component research and part selection, the ESP32-P4 pin-mux
+analysis, the Python data model, the SKiDL netlist, the KiCad placement and routing scripts, the BOM,
+the documentation, the tests and the CI that checks all of it.
+
+The remaining ~5 % is human, by the repository owner: writing the brief, making the decisions the
+agent asked for (licence, double-sided assembly, adding a display connector), and reviewing and
+merging every change.
+
+What that means for you:
+
+- **Everything that can be checked by a machine is checked**, on every commit, with the real KiCad
+  tools (see [Verification](#verification-what-github-checks-on-every-commit)). Every part number and
+  pinout has a source link in [`docs/component_verification.md`](docs/component_verification.md).
+- **What a machine can't prove is listed as open**: datasheet fine print marked UNVERIFIED, signal
+  integrity of the high-speed links, thermal behaviour, and whether the board works on the bench.
+  No experienced hardware engineer has reviewed it yet, and it has not been fabricated.
+- Treat it as a well-documented starting point, not a proven product. Reviews and bring-up reports
+  are very welcome.
+
+> **En español:** alrededor del **95 % de este proyecto lo ha hecho Claude Code**, el agente de
+> programación con IA de Anthropic, a partir de un enunciado escrito: investigación y elección de
+> componentes, pinout, netlist, colocación y enrutado en KiCad, BOM, documentación, tests y CI. El
+> ~5 % restante es humano: el enunciado, las decisiones que el agente pidió y la revisión y fusión de
+> cada cambio. Todo lo comprobable automáticamente se comprueba en cada commit; lo que no (integridad
+> de señal, térmica, funcionamiento real) está marcado como pendiente. Aún no se ha fabricado.
+
 ---
 
 ## Download the files
@@ -196,9 +226,9 @@ You don't have to publish your own changes, and you don't have to use the same l
 derivative. That attribution line is the licence's "Notice", so keep it (CERN-OHL-P v2 section 3.2).
 If you modify the design, add a short note saying so (section 3.3).
 
-Why so permissive? This design was produced largely with an AI assistant (Claude Code) driving the
-research, the data model and the generated files. There's little personal merit to protect, so the goal
-is simply that it's useful to as many people as possible.
+Why so permissive? About 95 % of this design was produced by an AI agent (Claude Code, see
+[How this project was made](#how-this-project-was-made-about-95--by-an-ai-agent)). There's little personal
+merit to protect, so the goal is simply that it's useful to as many people as possible.
 
 **Libre de usar:** cualquiera puede usar, modificar, fabricar y vender este diseño. Lo único que se pide
 es mencionar que el proyecto original es https://github.com/Andreuxxx1977/esp32-p4.

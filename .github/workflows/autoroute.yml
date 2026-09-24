@@ -1,0 +1,65 @@
+name: Autoroute (re-run FreeRouting)
+
+# Manual only: re-creates hardware/output/routed/ from the placed board so anyone can
+# reproduce (or improve) the committed routing. It takes 10-60 minutes. Download the
+# result from the run's Artifacts and commit it in a pull request; the regular CI then
+# checks it (DRC, same design as the placed board, Gerbers reproducible).
+on:
+  workflow_dispatch:
+    inputs:
+      passes:
+        description: "FreeRouting maximum passes"
+        default: "100"
+
+permissions:
+  contents: read
+
+env:
+  FREEROUTING_VERSION: "2.4.1"
+  FREEROUTING_SHA256: "fb2e91df901fa50cd23a09ab42793af0ece4f3b1f3857d6724dd6f9c0c00be98"
+
+jobs:
+  autoroute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4        # FreeRouting 2.4 needs Java 25
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Download FreeRouting from Maven Central (checksum pinned)
+        run: |
+          JAR="freerouting-${FREEROUTING_VERSION}-executable.jar"
+          curl -fsSL -o "$RUNNER_TEMP/$JAR" \
+            "https://repo1.maven.org/maven2/app/freerouting/freerouting/${FREEROUTING_VERSION}/$JAR"
+          echo "${FREEROUTING_SHA256}  $RUNNER_TEMP/$JAR" | sha256sum -c -
+          echo "JAR=$RUNNER_TEMP/$JAR" >> "$GITHUB_ENV"
+
+      - name: Route, import, fill zones
+        run: |
+          python3 hardware/pcbnew/autoroute.py --freerouting "$JAR" --java "$JAVA_HOME/bin/java" \
+            --passes "${{ github.event.inputs.passes }}" --work autoroute-work \
+            --out hardware/output/routed/esp32p4_extreme.kicad_pcb
+
+      - name: DRC gate and fabrication package
+        run: |
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output autoroute-work/routed_drc.json hardware/output/routed/esp32p4_extreme.kicad_pcb
+          python3 -m tools.check_drc_report autoroute-work/routed_drc.json --routed
+          python3 -m tools.export_fab hardware/output/routed/esp32p4_extreme.kicad_pcb
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: autorouted-board
+          path: |
+            hardware/output/routed/
+            hardware/output/fab/
+            autoroute-work/
+          if-no-files-found: warn
