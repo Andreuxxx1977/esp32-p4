@@ -115,7 +115,7 @@ So the pinout table, the netlist and the BOM can never disagree. To change the b
 ### Run the checks yourself
 
 ```bash
-pip install --use-pep517 "skidl==2.3.0" pytest
+pip install --use-pep517 -r requirements.txt
 python -m hardware.lib.board_spec                  # validate the design data
 python -m hardware.skidl.esp32p4_extreme_netlist   # netlist + ERC  -> hardware/output/
 python -m hardware.skidl.verify_netlist            # netlist == spec, pad by pad

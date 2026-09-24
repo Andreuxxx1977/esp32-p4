@@ -19,7 +19,7 @@ Commit the regenerated files **in the same commit** as the spec change. CI fails
 ## Workflow
 
 ```bash
-pip install --use-pep517 "skidl==2.3.0" pytest
+pip install --use-pep517 -r requirements.txt
 
 # 1. edit hardware/lib/board_spec.py
 python -m hardware.lib.board_spec                  # 2. design-rule validation (must print "clean")
