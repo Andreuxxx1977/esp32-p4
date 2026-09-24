@@ -25,7 +25,8 @@ pip install --use-pep517 -r requirements.txt
 python -m hardware.lib.board_spec                  # 2. design-rule validation (must print "clean")
 python -m hardware.skidl.esp32p4_extreme_netlist   # 3. netlist; refuses to write if ERC is not clean
 python -m hardware.skidl.verify_netlist            # 4. netlist == spec
-python -m hardware.skidl.check_footprints          # 5. if you touched parts/footprints (needs internet)
+python -m hardware.skidl.check_footprints          # 5. if you touched parts/footprints (needs internet;
+                                                   #    checks KiCad 10.0.6 libs, --ref to change)
 python -m tools.gen_docs                           # 6. docs + BOM
 python -m pytest -q                                # 7. all tests green
 ```
@@ -52,7 +53,7 @@ python -m pytest -q                                # 7. all tests green
 
 ## Where help is most welcome
 
-1. **Routing** the placed board in KiCad 9/10 while respecting the impedance rules
+1. **Routing** the placed board in KiCad 10 while respecting the impedance rules
    (`hardware/lib/impedance.py`: 50 ohm SE, 90 ohm USB, 100 ohm MIPI/Ethernet) and the Espressif
    layout rules summarised in `docs/TASK1_pinout.md`.
 2. **Datasheet review** of the items still marked **UNVERIFIED** in `docs/component_verification.md`.
