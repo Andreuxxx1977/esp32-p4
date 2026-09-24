@@ -49,6 +49,8 @@ EDGE_MM = lp.DESIGN_RULES["copper_edge"]
 VIA_D, VIA_DRILL = lp.DESIGN_RULES["via_diameter"], lp.DESIGN_RULES["via_drill"]
 HOLE_TO_HOLE = lp.DESIGN_RULES["hole_to_hole"]
 VIA_COST = 12.0                # in grid steps
+MICRO_D, MICRO_DRILL = 0.30, 0.10   # HDI laser microvia (autoroute.MICROVIA_MM)
+PLANE_NETS = (bs.GND, "+3V3", "VDD_HP")   # In1.Cu GND plane, In2.Cu +3V3 plane / VDD_HP island
 WINDOW_MM = 6.0                # search window around the pair's bounding box
 UUID_NS = uuid.UUID("5a1f7e0e-8d3b-4c55-9d0e-2f7b1d3a9c11")
 
@@ -231,10 +233,11 @@ class Grid:
         reach = w / 2 + HI_CLEARANCE + VIA_D + 0.5
         X, Y, hi, lo, own, holes = self.fields(win, net, reach)
         shape = X.shape
-        free, via_free, own_m = [], [], []
+        free, via_free, own_m, keeps = [], [], [], []
         vr = VIA_D / 2
         for L in (0, 1):
             k, edge = self.keepout(X, Y, net, L)
+            keeps.append((k, edge))
             f = (hi[L] >= w / 2 + max(c, HI_CLEARANCE) + margin) & (lo[L] >= w / 2 + max(c, 0.15) + margin)
             f &= ~k & (edge >= EDGE_MM + w / 2 + margin)
             v = (hi[L] >= vr + max(c, HI_CLEARANCE) + margin) & (lo[L] >= vr + max(c, 0.15) + margin)
@@ -281,6 +284,29 @@ class Grid:
         R = [root_of[comp[0]], root_of[comp[1]]]
         src = [(R[L] == ra) for L in (0, 1)]
         dst = [(R[L] == rb) for L in (0, 1)]
+        # plane nets: any spot where a via into their plane fits is a target as well
+        plane = [np.zeros(shape, bool), np.zeros(shape, bool)]
+        plane_kind = [None, None]
+        if net in PLANE_NETS:
+            mr = MICRO_D / 2
+
+            def fits(L, rad):
+                k, edge = keeps[L]
+                return ((hi[L] >= rad + max(c, HI_CLEARANCE) + margin) & (lo[L] >= rad + max(c, 0.15) + margin)
+                        & ~k & (edge >= EDGE_MM + rad + margin))
+            micro_holes = holes >= MICRO_DRILL / 2 + HOLE_TO_HOLE + margin
+            isl = lp.VDD_HP_ISLAND_HALF_MM + lp.ZONE_CLEARANCE_MM + 0.3
+            inside = (np.abs(X) < isl - 0.6) & (np.abs(Y) < isl - 0.6)
+            outside = ~((np.abs(X) < isl) & (np.abs(Y) < isl))
+            if net == bs.GND:
+                plane = [fits(0, mr) & micro_holes, via_ok.copy()]
+                plane_kind = ["micro_top", "through"]
+            else:
+                where = outside if net == "+3V3" else inside
+                plane = [via_ok & where, fits(1, mr) & micro_holes & where]
+                plane_kind = ["through", "micro_bottom"]
+            plane = [plane[L] & free[L] & ~own_m[L] for L in (0, 1)]
+            dst = [dst[L] | plane[L] for L in (0, 1)]
         # graph over the window: node id = L * N + i * ny + j
         nxw, nyw = shape
         N = nxw * nyw
@@ -353,13 +379,21 @@ class Grid:
                 m += 1
             segs.append((L, self.xy(i + win[0], j + win[1]), self.xy(pts[m][1] + win[0], pts[m][2] + win[1]), w))
             k = m
+        L, i, j, o = pts[-1]
+        if plane[L][i, j] and not (R[L][i, j] == rb):
+            vias.append(self.xy(i + win[0], j + win[1]) + (plane_kind[L],))
+        vias = [v if len(v) == 3 else v + ("through",) for v in vias]
         return segs, vias
 
     def commit(self, net: str, segs: list, vias: list) -> None:
         for L, (x0, y0), (x1, y1), w in segs:
             self.shapes.append(Shape("capsule", (L,), net, (x0, y0, x1, y1, w / 2)))
-        for x, y in vias:
-            self.shapes.append(Shape("circle", (0, 1), net, (x, y, VIA_D / 2), hole=VIA_DRILL, via=True))
+        for x, y, kind in vias:
+            if kind == "through":
+                self.shapes.append(Shape("circle", (0, 1), net, (x, y, VIA_D / 2), hole=VIA_DRILL, via=True))
+            else:
+                self.shapes.append(Shape("circle", (0,) if kind == "micro_top" else (1,), net,
+                                         (x, y, MICRO_D / 2), hole=MICRO_DRILL, via=True))
 
 
 # ==========================================================================
@@ -395,10 +429,14 @@ def sexpr_items(segs: list, vias: list, net: str) -> list[str]:
         out.append(f'\t(segment\n\t\t(start {x0 + ox:.4f} {y0 + oy:.4f})\n\t\t(end {x1 + ox:.4f} {y1 + oy:.4f})\n'
                    f'\t\t(width {w:g})\n\t\t(layer "{LAYERS[L]}")\n\t\t(net "{net}")\n'
                    f'\t\t(uuid "{uuid.uuid5(UUID_NS, key)}")\n\t)')
-    for x, y in vias:
+    for x, y, kind in vias:
         key = f"{net}:via:{x:.4f},{y:.4f}"
-        out.append(f'\t(via\n\t\t(at {x + ox:.4f} {y + oy:.4f})\n\t\t(size {VIA_D:g})\n\t\t(drill {VIA_DRILL:g})\n'
-                   f'\t\t(layers "F.Cu" "B.Cu")\n\t\t(net "{net}")\n\t\t(uuid "{uuid.uuid5(UUID_NS, key)}")\n\t)')
+        head, size, drill, layers = {
+            "through": ("(via", VIA_D, VIA_DRILL, '"F.Cu" "B.Cu"'),
+            "micro_top": ("(via micro", MICRO_D, MICRO_DRILL, '"F.Cu" "In1.Cu"'),
+            "micro_bottom": ("(via micro", MICRO_D, MICRO_DRILL, '"In2.Cu" "B.Cu"')}[kind]
+        out.append(f'\t{head}\n\t\t(at {x + ox:.4f} {y + oy:.4f})\n\t\t(size {size:g})\n\t\t(drill {drill:g})\n'
+                   f'\t\t(layers {layers})\n\t\t(net "{net}")\n\t\t(uuid "{uuid.uuid5(UUID_NS, key)}")\n\t)')
     return out
 
 
