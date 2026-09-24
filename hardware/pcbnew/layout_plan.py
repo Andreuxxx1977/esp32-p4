@@ -1110,6 +1110,7 @@ class EscapeModel:
 ESCAPE_STEP_MM = 0.025
 ESCAPE_DROP_COST = 1000.0        # a channel without escape track costs this much deviation
 ESCAPE_MARGIN_MM = 0.005          # on top of the netclass rules (grid / linearisation slack)
+ESCAPE_BEND_COST = 200.0          # per mm of second difference (one 45-degree bend ~ 5)
 ESCAPE_MILP_SECONDS = 300
 
 
@@ -1198,7 +1199,10 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
         # sigma[i,k] = |slope| of the segment arriving at sample k (0 straight .. 1 = 45 deg)
         base = 2 * n + len(pairs) + len(chans)
         sigma = {key: base + v for key, v in index.items()}
-        nv = base + n
+        # bend[i,k] = |x[k] - 2 x[k-1] + x[k-2]|: an L1 price on bends keeps the tracks to a
+        # few straight runs (and FreeRouting fast: it chokes on thousands of tiny segments)
+        bend = {key: base + n + v for key, v in index.items()}
+        nv = base + 2 * n
         rows, cols, vals, rhs = [], [], [], []
 
         def le(terms, b):                    # sum(c * var) <= b
@@ -1223,6 +1227,11 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
                     lower[v] = upper[v] = ch.t
                     continue
                 w = index[(ch.pad, k - 1)]
+                if k >= 2:
+                    w2 = index[(ch.pad, k - 2)]
+                    bn = bend[(ch.pad, k)]
+                    le([(v, 1), (w, -2), (w2, 1), (bn, -1)], 0.0)
+                    le([(v, -1), (w, 2), (w2, -1), (bn, -1)], 0.0)
                 sg = sigma[(ch.pad, k)]
                 lower[sg], upper[sg] = 0.0, 1.0      # 45 degrees at most (unless dropped)
                 le([(v, 1), (w, -1), (sg, -d), (z, -big)], 0.0)
@@ -1249,6 +1258,8 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
             lower[z], upper[z] = 0.0, 1.0
         for sg in sigma.values():
             lower[sg], upper[sg] = 0.0, 1.0
+        for bn in bend.values():
+            lower[bn], upper[bn] = 0.0, np.inf
         # pitch to the next few channels; slanted neighbours need more tangential room
         # (perpendicular = tangential / sqrt(1 + s^2) <= ... ; sqrt(1 + s^2) <= 1 + 0.414 s)
         slant = (math.sqrt(2) - 1) / 2
@@ -1262,8 +1273,9 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
                         (drop[a.pad], -big), (drop[b.pad], -big)], -pab)
         A = coo_matrix((vals, (rows, cols)), shape=(len(rhs), nv)).tocsr()
         cost = np.concatenate([np.zeros(n), np.ones(n), np.zeros(len(pairs)),
-                               np.full(len(chans), ESCAPE_DROP_COST), np.full(n, 0.002)])
-        integrality = np.concatenate([np.zeros(2 * n), np.ones(len(pairs) + len(chans)), np.zeros(n)])
+                               np.full(len(chans), ESCAPE_DROP_COST), np.full(n, 0.002),
+                               np.full(n, ESCAPE_BEND_COST)])
+        integrality = np.concatenate([np.zeros(2 * n), np.ones(len(pairs) + len(chans)), np.zeros(2 * n)])
         res = milp(cost, constraints=LinearConstraint(A, -np.inf, np.array(rhs)),
                    integrality=integrality, bounds=Bounds(lower, upper),
                    options={"time_limit": ESCAPE_MILP_SECONDS, "mip_rel_gap": 0.02})
@@ -1283,8 +1295,8 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
                 if k == 0 or k == last[ch.pad]:
                     pts.append((radii[k], xv))
                     continue
-                slope = round(x[index[(ch.pad, k + 1)]] - xv, 6)
-                if prev_slope is None or abs(slope - prev_slope) > 1e-6:
+                slope = x[index[(ch.pad, k + 1)]] - xv
+                if prev_slope is None or abs(slope - prev_slope) > 2e-4:
                     pts.append((radii[k], xv))
                 prev_slope = slope
             tracks.append(EscapeTrack(ch.pad, ch.net, ch.width,
