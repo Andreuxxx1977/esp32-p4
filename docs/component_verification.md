@@ -257,3 +257,12 @@ For the ESP32-P4 (2-lane CSI), connect D0, D1 and the clock. Leave D2/D3 unconne
 - Whether the CM4IO DISP1 connector uses the same pinout as Pi 5.
 - The LAN8720A TXD0/TXD1 internal pulls.
 - The ESP32-P4 40 MHz crystal ESR limit.
+
+---
+
+## Addendum: parts added after the verification pass
+
+| Item | MPN | Status | Key spec verified | LCSC C# | Evidence |
+|---|---|---|---|---|---|
+| J9 SPI TFT header | Würth Elektronik 61301621121 | VERIFIED | WR-PHD 2.54 mm THT vertical pin header, 2 rows x 8 = 16 pins, male, gold-plated, 3 A | not on LCSC (PCBWay sources by MPN) | https://www.digikey.my/en/products/detail/w%C3%BCrth-elektronik/61301621121/4846856 ; https://katalog.we-online.com/en/em/PHD_2_54_THT_DUAL_PIN_HEADER_6130XX21121 |
+| Q6 backlight switch | AO3401A | VERIFIED (same part as Q2/Q4) | P-ch -30 V -4 A, SOT-23 | C15127 | see item 9b above |
