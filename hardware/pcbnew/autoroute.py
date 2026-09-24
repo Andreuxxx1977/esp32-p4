@@ -152,15 +152,14 @@ def u1_stubs(board) -> list[PreTrack]:
 
 
 def board_vias(board) -> list[PreVia]:
-    """The vias the placed board already has (the EPAD thermal-via array)."""
-    out = []
-    for item in board.GetTracks():
-        if item.GetClass() != "PCB_VIA":
-            continue
-        p = item.GetPosition()
-        out.append(PreVia((p.x, p.y), item.GetWidth(pcbnew.F_Cu), item.GetDrillValue(),
-                          item.TopLayer(), item.BottomLayer(), item.GetNetname()))
-    return out
+    """The vias the placed board carries: the EPAD thermal-via array of the layout plan
+    (from the spec, so this also works on an already routed board)."""
+    ox, oy = origin_of(board)
+    tv = bs.THERMAL_VIA
+    n, pitch = tv["grid"], tv["pitch_mm"]
+    return [PreVia((ox + nm(round((i - (n - 1) / 2) * pitch, 4)), oy + nm(round((j - (n - 1) / 2) * pitch, 4))),
+                   nm(tv["pad_mm"]), nm(tv["drill_mm"]), pcbnew.F_Cu, pcbnew.B_Cu, bs.GND)
+            for i in range(n) for j in range(n)]
 
 
 def _rect_dist(r, x: int, y: int) -> float:
@@ -336,15 +335,36 @@ def add_items(board, tracks: list[PreTrack], vias: list[PreVia]) -> None:
         board.Add(via)
 
 
-def routing_view(board, zones: list, tracks: list[PreTrack], vias: list[PreVia]) -> list[str]:
+def _is_prerouted(item, tracks: list[PreTrack], vias: list[PreVia]) -> bool:
+    if item.GetClass() == "PCB_VIA":
+        p = item.GetPosition()
+        return any(_near((p.x, p.y), v.pos) for v in vias)
+    s, e = item.GetStart(), item.GetEnd()
+    return any(item.GetLayer() == pt.layer and ((_near((s.x, s.y), pt.start) and _near((e.x, e.y), pt.end))
+                                               or (_near((s.x, s.y), pt.end) and _near((e.x, e.y), pt.start)))
+               for pt in tracks)
+
+
+def routing_view(board, zones: list, tracks: list[PreTrack], vias: list[PreVia],
+                 resume: bool = False) -> list[str]:
     """Modify ``board`` in place into what the router should see. Returns a log.
     ``zones`` is ``list(board.Zones())`` taken right after loading: some pcbnew/SWIG
-    builds crash walking the zones (or footprints) once items were added or removed."""
+    builds crash walking the zones (or footprints) once items were added or removed.
+    ``resume``: ``board`` is an earlier routed result; its pre-routing is locked, the
+    rest of its copper stays as ordinary (rip-up-able) routing for more passes."""
     log = []
     ox, oy = origin_of(board)
-    for item in list(board.GetTracks()):     # replaced by the pre-routing (same vias, locked)
-        board.Delete(item)
-    add_items(board, tracks, vias)
+    if resume:
+        kept = 0
+        for item in board.GetTracks():
+            pre = _is_prerouted(item, tracks, vias)
+            item.SetLocked(pre)
+            kept += not pre
+        log.append(f"resume: {kept} routed tracks/vias kept as rip-up-able routing")
+    else:
+        for item in list(board.GetTracks()):     # replaced by the pre-routing (same vias, locked)
+            board.Delete(item)
+        add_items(board, tracks, vias)
     # The bottom solder-mask window over the thermal-via field (exposed copper for a thermal
     # pad): no tracks or new vias of other nets in it.
     tv = bs.THERMAL_VIA                       # same square as layout_plan's B.Mask window
@@ -565,6 +585,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fr-option", action="append", default=[], metavar="--KEY=VALUE",
                     help="extra FreeRouting setting, e.g. --fr-option=--router.fanout.enabled=false")
     ap.add_argument("--ses", type=Path, help="import this session instead of running FreeRouting")
+    ap.add_argument("--resume", type=Path, metavar="ROUTED",
+                    help="start from an earlier routed board (more passes on its routing)")
     ap.add_argument("--verify", type=Path, metavar="ROUTED",
                     help="only check that ROUTED has the placement, pad nets and zones of --board")
     args = ap.parse_args(argv)
@@ -583,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
     work = args.work or Path(tempfile.mkdtemp(prefix="autoroute-"))
     work.mkdir(parents=True, exist_ok=True)
     board_path = args.board.resolve()
-    view = pcbnew.LoadBoard(str(board_path))
+    view = pcbnew.LoadBoard(str(args.resume.resolve() if args.resume else board_path))
     zones = list(view.Zones())
     tracks = u1_stubs(view) if args.u1_stubs else []
     vias = board_vias(view)
@@ -597,7 +619,7 @@ def main(argv: list[str] | None = None) -> int:
         more_vias, note = plane_fanout(view, tracks, vias)
         vias += more_vias
         log += note
-    log += routing_view(view, zones, tracks, vias)
+    log += routing_view(view, zones, tracks, vias, resume=bool(args.resume))
     dsn, ses = work / "board.dsn", work / "board.ses"
     if not pcbnew.ExportSpecctraDSN(view, str(dsn)):
         raise SystemExit("DSN export failed")
