@@ -1128,6 +1128,9 @@ def bom_lines() -> list[dict[str, object]]:
 
 
 if __name__ == "__main__":  # pragma: no cover
+    import sys
+
     problems = validate()
     print(f"{len(COMPONENTS)} components, {len(nets())} nets, {len(PARTS)} part types")
     print("\n".join(problems) if problems else "validate(): clean")
+    sys.exit(1 if problems else 0)
