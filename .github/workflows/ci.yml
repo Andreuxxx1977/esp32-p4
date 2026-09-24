@@ -47,6 +47,8 @@ jobs:
   kicad:
     name: KiCad 10 (pcbnew API, DRC, render, centroid)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # only used on main, to publish the renders branch
     container:
       image: kicad/kicad:10.0
       # The image's default user (uid 1000) cannot write the runner workspace.
@@ -63,6 +65,15 @@ jobs:
           python3 -c "import pcbnew; print('pcbnew', pcbnew.Version())"
           mkdir -p "$OUT"
 
+      - name: Build the board with the pcbnew placement script (real KiCad 10 API) and DRC it
+        if: hashFiles('hardware/pcbnew/esp32p4_extreme_place.py') != ''
+        run: |
+          python3 hardware/pcbnew/esp32p4_extreme_place.py --strict-libs \
+            --fp-dir /usr/share/kicad/footprints --out "$OUT/pcbnew_built/esp32p4_extreme.kicad_pcb"
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output "$OUT/pcbnew_built_drc.json" "$OUT/pcbnew_built/esp32p4_extreme.kicad_pcb"
+          python3 -m tools.check_drc_report "$OUT/pcbnew_built_drc.json"
+
       - name: Board file present?
         id: board
         run: |
@@ -77,11 +88,30 @@ jobs:
             --output "$OUT/drc.json" "$BOARD"
           python3 -m tools.check_drc_report "$OUT/drc.json"
 
-      - name: 3D renders (top / bottom)
+      - name: 3D renders (top / bottom) with the parts' 3D models
         if: steps.board.outputs.exists == 'true'
         run: |
-          kicad-cli pcb render --side top --width 1600 --height 1200 --output "$OUT/board_top.png" "$BOARD"
-          kicad-cli pcb render --side bottom --width 1600 --height 1200 --output "$OUT/board_bottom.png" "$BOARD"
+          # KiCad's 3D models are a separate library: fetch exactly the ones the board uses
+          export KICAD10_3DMODEL_DIR="$(python3 -m tools.fetch_3d_models "$BOARD" --dest "$RUNNER_TEMP/3d")"
+          for side in top bottom; do
+            kicad-cli pcb render --side "$side" --width 1600 --height 1200 --quality high \
+              --output "$OUT/board_$side.png" "$BOARD"
+          done
+
+      - name: Publish the renders to the 'renders' branch (main only)
+        if: steps.board.outputs.exists == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/renders" && cp "$OUT"/board_*.png "$RUNNER_TEMP/renders/"
+          cd "$RUNNER_TEMP/renders"
+          printf 'KiCad 10 renders of %s (commit %s), published by CI.\n' "$BOARD" "$GITHUB_SHA" > README.md
+          git init -q -b renders
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Renders for $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" renders
 
       - name: Centroid / pick-and-place file for PCBWay
         if: steps.board.outputs.exists == 'true'
