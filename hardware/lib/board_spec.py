@@ -184,9 +184,10 @@ ESD_4CH = _add(PartType(
     "TPD4E05U06DQAR", "TPD4E05U06", "TPD4E05U06DQAR", "Texas Instruments",
     "Package_SON:USON-10_2.5x1.0mm_P0.5mm", "USON-10 2.5x1.0 mm",
     "4-channel 0.5 pF flow-through ESD array (microSD, UHS-I safe)",
-    _pins("D1+", "D1-", "GND", "D2+", "D2-", "NC", "NC", "GND", "NC", "NC"), 0.60,
+    _pins("D1+", "D1-", "GND", "D2+", "D2-", "FT_D2-", "FT_D2+", "GND", "FT_D1-", "FT_D1+"), 0.60,
     kind="diode", lcsc="C138714",
-    pin_source="KiCad TPD4E05U06DQA (extends TPD4EUSB30)"))
+    pin_source="KiCad TPD4E05U06DQA (extends TPD4EUSB30); pads 6/7/9/10 are the no-internal-"
+               "connection flow-through partners of 5/4/2/1"))
 
 DUAL_NPN = _add(PartType(
     "MMDT3904-7-F", "MMDT3904", "MMDT3904-7-F", "Diodes Incorporated",
@@ -210,12 +211,12 @@ PMOS = _add(PartType(
 USB_C = _add(PartType(
     "USB4105-GF-A", "USB-C", "USB4105-GF-A", "GCT",
     "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
-    "USB Type-C 16P, top-mount", "USB 2.0 Type-C receptacle (UFP, 5.1k Rd)",
+    "USB Type-C 16P, top-mount", "USB 2.0 Type-C receptacle (UFP, 5.1k Rd); SMD contacts + 4 THT shell legs",
     (("A1", "GND"), ("A4", "VBUS"), ("A5", "CC1"), ("A6", "D+"), ("A7", "D-"),
      ("A8", "SBU1"), ("A9", "VBUS"), ("A12", "GND"), ("B1", "GND"), ("B4", "VBUS"),
      ("B5", "CC2"), ("B6", "D+"), ("B7", "D-"), ("B8", "SBU2"), ("B9", "VBUS"),
-     ("B12", "GND"), ("S1", "SHIELD")), 3.31, kind="conn", lcsc="C3020560",
-    pin_source="KiCad USB_C_Receptacle_USB2.0_16P (shield pad named S1 in the GCT footprint)"))
+     ("B12", "GND"), ("SH", "SHIELD")), 3.31, kind="conn", lcsc="C3020560",
+    pin_source="KiCad USB_C_Receptacle_USB2.0_16P; GCT footprint shell = 4 plated 'SH' legs (pin-in-paste)"))
 
 MICROSD = _add(PartType(
     "DM3AT-SF-PEJM5", "microSD", "DM3AT-SF-PEJM5", "Hirose",
@@ -223,14 +224,14 @@ MICROSD = _add(PartType(
     "microSD socket with card-detect switch",
     (("1", "DAT2"), ("2", "DAT3/CD"), ("3", "CMD"), ("4", "VDD"), ("5", "CLK"),
      ("6", "VSS"), ("7", "DAT0"), ("8", "DAT1"), ("9", "DET_B"), ("10", "DET_A"),
-     ("11", "SHIELD")), 1.98, kind="conn", lcsc="C114218",
-    pin_source="KiCad Micro_SD_Card_Det2 (shield pad numbering to be matched to footprint)"))
+     ("SH", "SHIELD")), 1.98, kind="conn", lcsc="C114218",
+    pin_source="KiCad Micro_SD_Card_Det2; footprint pads 1-10 + 4 'SH' shield pads"))
 
 # Raspberry Pi 22-pin 0.5 mm MIPI pinout (Pi 5 / CM4 / Zero camera & display).
 RPI22_PINS = _pins(
     "GND", "D0_N", "D0_P", "GND", "D1_N", "D1_P", "GND", "CLK_N", "CLK_P", "GND",
     "D2_N", "D2_P", "GND", "D3_N", "D3_P", "GND", "IO0", "IO1", "GND", "SCL", "SDA",
-    "3V3") + (("23", "MP"),)
+    "3V3") + (("MP", "MP"),)
 
 FPC22 = _add(PartType(
     "F32Q-1A7H1-11022", "FPC 22P 0.5mm", "F32Q-1A7H1-11022", "Amphenol ICC",
@@ -306,9 +307,10 @@ IND_3V3 = _add(PartType(
 
 IND_HP = _add(PartType(
     "DFE252012F-2R2M=P2", "2.2uH", "DFE252012F-2R2M=P2", "Murata",
-    "Inductor_SMD:L_Murata_DFE252012F", "2520 metal",
+    "Inductor_SMD:L_1008_2520Metric", "2520 (1008) metal alloy",
     "2.2 uH, Isat 3.3 A, 82 mOhm -- VDD_HP buck inductor",
-    _pins("1", "2"), 1.20, kind="ind", lcsc="C576403"))
+    _pins("1", "2"), 1.20, kind="ind", lcsc="C576403",
+    pin_source="KiCad has no DFE252012F footprint: generic 1008/2520 land -- check Murata land drawing"))
 
 TACT = _add(PartType(
     "PTS810SJM250SMTRLFS", "Tactile", "PTS810SJM250SMTRLFS", "C&K",
@@ -727,7 +729,7 @@ def usb_port(ref: str, vbus: str, dp: str, dm: str, esd: PartType, esd_ref: str,
     add(ref, USB_C, {"A4": vbus, "A9": vbus, "B4": vbus, "B9": vbus,
                      "A6": dp, "B6": dp, "A7": dm, "B7": dm,
                      "A5": f"{ref}_CC1", "B5": f"{ref}_CC2",
-                     "A1": GND, "A12": GND, "B1": GND, "B12": GND, "S1": GND}, group,
+                     "A1": GND, "A12": GND, "B1": GND, "B12": GND, "SH": GND}, group,
         place=place)
     R("5.1k", f"{ref}_CC1", GND, group, place=Near(ref, "A5"), note="UFP Rd")
     R("5.1k", f"{ref}_CC2", GND, group, place=Near(ref, "B5"), note="UFP Rd")
@@ -847,12 +849,15 @@ add("Q2", PMOS, {"G": "SD_PWR_EN", "S": "+3V3", "D": "SD_VDD"}, _G, place=Near("
 R("10k", "SD_PWR_EN", GND, _G, place=Near("Q2", "1"), note="Card powered by default")
 R("10k", "+3V3", "SD_DET", _G, place=Near("J5", "10"))
 C("10uF", "SD_VDD", GND, _G, size="0805", place=Near("J5", "4"))
-add("U10", ESD_4CH, {"D1+": "SD_D0_C", "D1-": "SD_D1_C", "D2+": "SD_D2_C", "D2-": "SD_D3_C",
+# Flow-through: pads 10/9/7/6 sit opposite 1/2/4/5 and carry the same net so the line
+# is routed straight across the device.
+add("U10", ESD_4CH, {"D1+": "SD_D0_C", "10": "SD_D0_C", "D1-": "SD_D1_C", "9": "SD_D1_C",
+                     "D2+": "SD_D2_C", "7": "SD_D2_C", "D2-": "SD_D3_C", "6": "SD_D3_C",
                      "3": GND, "8": GND}, _G, place=Near("J5", "7", 6.0),
     note="Flow-through TVS, 0.5 pF (UHS-I safe)")
-add("U11", ESD_4CH, {"D1+": "SD_CLK_C", "D1-": "SD_CMD_C", "D2+": "SD_DET",
-                     "3": GND, "8": GND}, _G, place=Near("J5", "5", 6.0),
-    note="Flow-through TVS; channel D2- unused")
+add("U11", ESD_4CH, {"D1+": "SD_CLK_C", "10": "SD_CLK_C", "D1-": "SD_CMD_C", "9": "SD_CMD_C",
+                     "D2+": "SD_DET", "7": "SD_DET", "3": GND, "8": GND}, _G,
+    place=Near("J5", "5", 6.0), note="Flow-through TVS; channel D2- (pads 5/6) unused")
 C("100nF", "SD_VDD", GND, _G, place=Near("J5", "4", 2.0))
 
 # -------------------------------------------------- Camera (MIPI CSI-2) ---
