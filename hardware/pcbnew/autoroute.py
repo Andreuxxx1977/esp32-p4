@@ -56,6 +56,7 @@ if str(REPO) not in sys.path:
 import pcbnew  # noqa: E402  (KiCad)
 
 from hardware.lib import board_spec as bs  # noqa: E402
+from hardware.lib import esp32p4_pinout as p4  # noqa: E402
 from hardware.pcbnew import layout_plan as lp  # noqa: E402
 
 DEFAULT_BOARD = REPO / "hardware" / "output" / "esp32p4_extreme.kicad_pcb"
@@ -71,6 +72,9 @@ SOC_POWER_WIDTH_UM = 250
 SOC_POWER_VIA = "Via[0-3]_450:200_um"
 
 U1_STUB_WIDTH_MM = 0.10
+INNER_TRACK_MM = 0.15             # U1 pad -> inner via
+INNER_VIA_PAD_GAP_MM = 0.10       # inner via copper to another U1 pad (also clears its mask opening)
+INNER_VIA_SHIFTS_MM = (0.0, -0.10, 0.10, -0.20, 0.20)
 MICROVIA_MM = (0.30, 0.10)        # laser microvia pad / drill (annular ring 0.10 mm)
 PLANE_VIA_CLEARANCE_MM = 0.20     # the largest netclass clearance
 
@@ -244,6 +248,69 @@ def plane_fanout(board, stubs: list[PreTrack], existing: list[PreVia]) -> tuple[
     n_micro = sum(v.micro for v in vias)
     return vias, [f"plane fan-out: {len(vias)} vias in pad ({n_micro} laser microvias, "
                   f"{len(vias) - n_micro} through), {skipped} pads left to the router"]
+
+
+def inner_vias(board, existing: list[PreVia]) -> tuple[list[PreTrack], list[PreVia], list[str]]:
+    """Vias *inside* U1's pad ring (between the EPAD and the pad row) for the pads whose
+    decoupling sits on the bottom side under them, and for the VDD_HP pads (the via lands
+    in the VDD_HP island on In2.Cu). A short inward track joins pad and via. Neighbouring
+    pads are 0.35 mm apart, so at most every other pad gets one; VDD_HP pads first."""
+    ox, oy = origin_of(board)
+    u1_nets = next(c for c in bs.COMPONENTS if c.ref == "U1").conns
+    want = [p for p, n in sorted(u1_nets.items(), key=lambda kv: int(kv[0])) if n == "VDD_HP"]
+    want += sorted({c.place.pad for c in bs.COMPONENTS if isinstance(c.place, bs.Near)
+                    and c.place.ref == "U1" and c.place.side == "B"} - set(want), key=int)
+    r_via = (p4.EPAD_SIZE_MM / 2 + p4.ROW_OFFSET_MM - p4.PAD_SIZE_MM[1] / 2) / 2   # mid-band
+    d, drill = nm(lp.DESIGN_RULES["via_diameter"]), nm(lp.DESIGN_RULES["via_drill"])
+    spacing = d + nm(lp.DESIGN_RULES["min_clearance"]) + nm(0.02)
+    bottom = []
+    for fp in board.GetFootprints():
+        if fp.GetLayer() != pcbnew.B_Cu:
+            continue
+        for pad in fp.Pads():
+            b = pad.GetBoundingBox()
+            bottom.append(((b.GetLeft(), b.GetTop(), b.GetRight(), b.GetBottom()), str(pad.GetNetname())))
+    # U1's own pads as rectangles (design mm -> board nm), for copper / hole / mask clearance
+    w, l = p4.PAD_SIZE_MM
+    u1_pads = []
+    for n in range(1, 105):
+        x, y = p4.pad_position(n)
+        hx, hy = (l / 2, w / 2) if p4.pad_side(n) in ("left", "right") else (w / 2, l / 2)
+        u1_pads.append(((ox + nm(x - hx), oy + nm(y - hy), ox + nm(x + hx), oy + nm(y + hy)),
+                        u1_nets.get(str(n), "")))
+    holes = [(v.pos[0], v.pos[1], v.drill) for v in existing]
+    tracks, vias, skipped = [], [], []
+    clr = nm(PLANE_VIA_CLEARANCE_MM)
+    to_pad = max(d / 2 + nm(INNER_VIA_PAD_GAP_MM), drill / 2 + nm(lp.DESIGN_RULES["hole_clearance"]))
+
+    def fits(vx: int, vy: int, net: str) -> bool:
+        return (all(math.hypot(v.pos[0] - vx, v.pos[1] - vy) >= spacing for v in vias)
+                and all(math.hypot(hx - vx, hy - vy) >= (hd + drill) / 2 + nm(lp.DESIGN_RULES["hole_to_hole"])
+                        for hx, hy, hd in holes)
+                and not any(n != net and _rect_dist(r, vx, vy) < to_pad for r, n in u1_pads)
+                and not any(n != net and _rect_dist(r, vx, vy) < d / 2 + clr for r, n in bottom))
+
+    for pad in want:
+        x, y = p4.pad_position(int(pad))
+        along_y = p4.pad_side(int(pad)) in ("left", "right")
+        net = u1_nets[pad]
+        for shift in INNER_VIA_SHIFTS_MM:             # slide along the row if a corner is in the way
+            vx, vy = (math.copysign(r_via, x), y + shift) if along_y else (x + shift, math.copysign(r_via, y))
+            vx, vy = ox + nm(vx), oy + nm(vy)
+            if fits(vx, vy, net):
+                break
+        else:
+            skipped.append(pad)
+            continue
+        px, py = ox + nm(x), oy + nm(y)
+        # the pad's inner end first, then (if slid) a short dog-leg to the via
+        ix, iy = ((ox + nm(math.copysign(p4.ROW_OFFSET_MM - l / 2, x)), py) if along_y
+                  else (px, oy + nm(math.copysign(p4.ROW_OFFSET_MM - l / 2, y))))
+        vias.append(PreVia((vx, vy), d, drill, pcbnew.F_Cu, pcbnew.B_Cu, net))
+        tracks.append(PreTrack((px, py), (ix, iy), nm(INNER_TRACK_MM), pcbnew.F_Cu, net))
+        tracks.append(PreTrack((ix, iy), (vx, vy), nm(INNER_TRACK_MM), pcbnew.F_Cu, net))
+    return tracks, vias, [f"U1 inner vias: {len(vias)} ({', '.join(sorted({v.net for v in vias}))});"
+                          f" not possible for pads {', '.join(skipped) or '-'}"]
 
 
 def add_items(board, tracks: list[PreTrack], vias: list[PreVia]) -> None:
@@ -490,6 +557,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-u1-stubs", dest="u1_stubs", action="store_false")
     ap.add_argument("--microvias", action="store_true",
                     help="let the router use the HDI laser microvias (L1-L2, L3-L4)")
+    ap.add_argument("--no-inner-vias", dest="inner_vias", action="store_false",
+                    help="no vias inside U1's pad ring for bottom-side decoupling / VDD_HP")
     ap.add_argument("--no-plane-vias", dest="plane_vias", action="store_false",
                     help="do not pre-place vias in the pads of plane nets")
     ap.add_argument("--work", type=Path, help="keep DSN/SES/log here (default: temp dir)")
@@ -519,6 +588,11 @@ def main(argv: list[str] | None = None) -> int:
     tracks = u1_stubs(view) if args.u1_stubs else []
     vias = board_vias(view)
     log = [f"pre-routing: {len(tracks)} U1 fan-out stubs, {len(vias)} planned vias kept"]
+    if args.inner_vias:
+        more_tracks, more_vias, note = inner_vias(view, vias)
+        tracks += more_tracks
+        vias += more_vias
+        log += note
     if args.plane_vias:
         more_vias, note = plane_fanout(view, tracks, vias)
         vias += more_vias
