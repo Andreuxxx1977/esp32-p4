@@ -190,6 +190,35 @@ def adjust_dsn(text: str) -> tuple[str, list[str]]:
     return text, log
 
 
+# HDI 1+2+1 laser microvias (0.25 / 0.10 mm, board rules in the .kicad_pro): L1-L2 lands
+# on the GND plane, L4-L3 on the +3V3 plane / VDD_HP island. KiCad's DSN export only lists
+# the net classes' through vias, so they are added here for the nets that use planes.
+MICROVIAS = {"Via[0-1]_250:100_um": ("Signal_Top", "GND"),
+             "Via[2-3]_250:100_um": ("VCC_3V3", "Signal_Bottom")}
+MICROVIA_CLASSES = ("kicad_default", "POWER_SOC", "POWER")
+
+
+def add_microvias(text: str) -> tuple[str, list[str]]:
+    stacks = "".join(
+        f"    (padstack \"{name}\"\n"
+        + "".join(f"      (shape (circle {layer} 250))\n" for layer in layers)
+        + "      (attach off)\n    )\n" for name, layers in MICROVIAS.items())
+    i = text.index("    (padstack \"Via[")
+    text = text[:i] + stacks + text[i:]
+    names = " ".join(f'"{n}"' for n in MICROVIAS)
+    text = re.sub(r"(\(structure.*?\(via [^)]*)\)", lambda m: m.group(1) + " " + names + ")",
+                  text, count=1, flags=re.S)
+    done = []
+    for cls in MICROVIA_CLASSES:
+        pat = re.compile(r"(\(class " + re.escape(cls) + r" .*?\(circuit\s*)(\(use_via [^)]*\))",
+                         re.S)
+        text, n = pat.subn(lambda m: m.group(1) + m.group(2) + "".join(
+            f'\n        (use_via "{v}")' for v in MICROVIAS), text, count=1)
+        if n:
+            done.append(cls)
+    return text, [f"HDI microvias L1-L2 / L3-L4 allowed for classes {', '.join(done)}"]
+
+
 def run_freerouting(java: str, jar: Path, dsn: Path, ses: Path, passes: int,
                     threads: int | None, timeout: int, logfile: Path,
                     extra: list[str] = ()) -> int:
@@ -267,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--threads", type=int)
     ap.add_argument("--timeout", type=int, default=3600, help="seconds for FreeRouting")
     ap.add_argument("--no-u1-stubs", dest="u1_stubs", action="store_false")
+    ap.add_argument("--microvias", action="store_true",
+                    help="let the router use the HDI laser microvias (L1-L2, L3-L4)")
     ap.add_argument("--work", type=Path, help="keep DSN/SES/log here (default: temp dir)")
     ap.add_argument("--fr-option", action="append", default=[], metavar="--KEY=VALUE",
                     help="extra FreeRouting setting, e.g. --fr-option=--router.fanout.enabled=false")
@@ -295,6 +326,9 @@ def main(argv: list[str] | None = None) -> int:
     if not pcbnew.ExportSpecctraDSN(view, str(dsn)):
         raise SystemExit("DSN export failed")
     text, more = adjust_dsn(dsn.read_text())
+    if args.microvias:
+        text, mv = add_microvias(text)
+        more += mv
     dsn.write_text(text)
     for line in log + more:
         print("  " + line)
