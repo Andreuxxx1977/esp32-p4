@@ -14,16 +14,6 @@
     (constraint disallow footprint)
     (condition "A.intersectsArea('HEATSINK_KEEPOUT') && A.Reference != 'C1' && A.Reference != 'C2' && A.Reference != 'C3' && A.Reference != 'C4' && A.Reference != 'C5' && A.Reference != 'C6' && A.Reference != 'C7' && A.Reference != 'C8' && A.Reference != 'C9' && A.Reference != 'C10' && A.Reference != 'C11' && A.Reference != 'C12' && A.Reference != 'C13' && A.Reference != 'C14' && A.Reference != 'C15' && A.Reference != 'C16' && A.Reference != 'C17' && A.Reference != 'C18' && A.Reference != 'C19' && A.Reference != 'C20' && A.Reference != 'C21' && A.Reference != 'C22' && A.Reference != 'C23' && A.Reference != 'C24' && A.Reference != 'C25' && A.Reference != 'C26' && A.Reference != 'C27' && A.Reference != 'C28' && A.Reference != 'C29' && A.Reference != 'C30' && A.Reference != 'C31' && A.Reference != 'C32' && A.Reference != 'C33' && A.Reference != 'C34' && A.Reference != 'C35' && A.Reference != 'C36' && A.Reference != 'C37' && A.Reference != 'C38' && A.Reference != 'C39' && A.Reference != 'C40' && A.Reference != 'C41' && A.Reference != 'C42' && A.Reference != 'C43' && A.Reference != 'C44' && A.Reference != 'C45' && A.Reference != 'C46' && A.Reference != 'C48' && A.Reference != 'C52' && A.Reference != 'C57' && A.Reference != 'C60' && A.Reference != 'C61' && A.Reference != 'C62' && A.Reference != 'C63' && A.Reference != 'C64' && A.Reference != 'C66' && A.Reference != 'C67' && A.Reference != 'C68' && A.Reference != 'C69' && A.Reference != 'C70' && A.Reference != 'C71' && A.Reference != 'C72' && A.Reference != 'C73' && A.Reference != 'C74' && A.Reference != 'C75' && A.Reference != 'C76' && A.Reference != 'C77' && A.Reference != 'C79' && A.Reference != 'C80' && A.Reference != 'C81' && A.Reference != 'C82' && A.Reference != 'C83' && A.Reference != 'C85' && A.Reference != 'C86' && A.Reference != 'R1' && A.Reference != 'R2' && A.Reference != 'R3' && A.Reference != 'R4' && A.Reference != 'R5' && A.Reference != 'R6' && A.Reference != 'R7' && A.Reference != 'R8' && A.Reference != 'R9' && A.Reference != 'R10' && A.Reference != 'R11' && A.Reference != 'R12' && A.Reference != 'R13' && A.Reference != 'R14' && A.Reference != 'R15' && A.Reference != 'R16' && A.Reference != 'R17' && A.Reference != 'R18' && A.Reference != 'R19' && A.Reference != 'R20' && A.Reference != 'R21' && A.Reference != 'R22' && A.Reference != 'R23' && A.Reference != 'R24' && A.Reference != 'R25' && A.Reference != 'R26' && A.Reference != 'R27' && A.Reference != 'R28' && A.Reference != 'R29' && A.Reference != 'R30' && A.Reference != 'R31' && A.Reference != 'R32' && A.Reference != 'R33' && A.Reference != 'R34' && A.Reference != 'R35' && A.Reference != 'R36' && A.Reference != 'R37' && A.Reference != 'R38' && A.Reference != 'R39' && A.Reference != 'R40' && A.Reference != 'R41' && A.Reference != 'R42' && A.Reference != 'R43' && A.Reference != 'R44' && A.Reference != 'R45' && A.Reference != 'R46' && A.Reference != 'R47' && A.Reference != 'R48' && A.Reference != 'R49' && A.Reference != 'R50' && A.Reference != 'R51' && A.Reference != 'R52' && A.Reference != 'R53' && A.Reference != 'R54' && A.Reference != 'R55' && A.Reference != 'R56' && A.Reference != 'R57' && A.Reference != 'R58' && A.Reference != 'R59' && A.Reference != 'R60' && A.Reference != 'R61' && A.Reference != 'R62' && A.Reference != 'R63' && A.Reference != 'R64' && A.Reference != 'R65' && A.Reference != 'R66' && A.Reference != 'R67' && A.Reference != 'R68' && A.Reference != 'R69' && A.Reference != 'R70' && A.Reference != 'R71' && A.Reference != 'R72' && A.Reference != 'R73' && A.Reference != 'R74' && A.Reference != 'R75' && A.Reference != 'R76' && A.Reference != 'R77' && A.Reference != 'R78' && A.Reference != 'R79' && A.Reference != 'R80' && A.Reference != 'R81' && A.Reference != 'R82' && A.Reference != 'R83' && A.Reference != 'R84' && A.Reference != 'R85' && A.Reference != 'R86' && A.Reference != 'R87' && A.Reference != 'R88' && A.Reference != 'R89' && A.Reference != 'R90' && A.Reference != 'R91' && A.Reference != 'R92' && A.Reference != 'R93' && A.Reference != 'R94' && A.Reference != 'R95' && A.Reference != 'U1'"))
 
-# ---------------------------------------------------------------- SoC fan-out (0.35 mm pitch)
-# Inside the U1 courtyard the netclass clearances cannot be met: neck down to the HDI minimum
-# (pads, tracks, vias only -- pours keep their own clearance).
-(rule "u1_fanout_clearance"
-    (constraint clearance (min 0.09mm))
-    (condition "A.intersectsCourtyard('U1') && A.Type != 'Zone' && B.Type != 'Zone'"))
-(rule "u1_fanout_track_width"
-    (constraint track_width (min 0.09mm))
-    (condition "A.Type == 'Track' && A.intersectsCourtyard('U1')"))
-
 # ---------------------------------------------------------------- footprint-intrinsic
 # GCT USB4105 land pattern: its own NPTH locating pegs sit 0.194 mm from pads A1/B12/
 # A12/B1 (manufacturer drawing). Relax hole clearance only *inside* those footprints.
@@ -58,9 +48,20 @@
     (constraint diff_pair_uncoupled (max 5.0mm))
     (constraint track_width (min 0.122mm) (opt 0.135mm))
     (condition "A.NetClass == 'ETH_100' && A.inDiffPair('*')"))
-# NOTE: KiCad recognises a pair only by the suffixes P/N or +/-. The USB nets are named
-# ..._DP/..._DM, so the USB_90 rule above stays inert until they are renamed (e.g. USB1_D_P /
-# USB1_D_N) in board_spec.py; the router's diff-pair mode needs the same rename.
+
+# ---------------------------------------------------------------- SoC fan-out (0.35 mm pitch)
+# Inside the U1 courtyard the netclass clearances cannot be met: neck down to the HDI minimum
+# (pads, tracks, vias only -- pours keep their own clearance). The pairs leave U1 as 0.10 mm
+# stubs on the pad pitch. These rules come after the pair rules: later rules take precedence.
+(rule "u1_fanout_clearance"
+    (constraint clearance (min 0.09mm))
+    (condition "A.intersectsCourtyard('U1') && A.Type != 'Zone' && B.Type != 'Zone'"))
+(rule "u1_fanout_track_width"
+    (constraint track_width (min 0.09mm))
+    (condition "A.Type == 'Track' && A.intersectsCourtyard('U1')"))
+(rule "u1_fanout_diff_pair_gap"
+    (constraint diff_pair_gap (min 0.09mm) (opt 0.25mm) (max 0.5mm))
+    (condition "A.inDiffPair('*') && A.intersectsCourtyard('U1')"))
 
 # ---------------------------------------------------------------- (3) skew / length matching
 # Intra-pair skew <= 0.254 mm (10 mil). One rule per pair: a skew rule measures all nets it
