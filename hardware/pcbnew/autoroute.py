@@ -278,6 +278,18 @@ def routing_view(board, zones: list, tracks: list[PreTrack], vias: list[PreVia])
     for item in list(board.GetTracks()):     # replaced by the pre-routing (same vias, locked)
         board.Delete(item)
     add_items(board, tracks, vias)
+    # The bottom solder-mask window over the thermal-via field (exposed copper for a thermal
+    # pad): no tracks or new vias of other nets in it.
+    tv = bs.THERMAL_VIA                       # same square as layout_plan's B.Mask window
+    half = nm((tv["grid"] - 1) / 2 * tv["pitch_mm"] + tv["pad_mm"] / 2 + PLANE_VIA_CLEARANCE_MM)
+    keep = pcbnew.ZONE(board)
+    keep.SetIsRuleArea(True)
+    keep.SetLayer(pcbnew.B_Cu)
+    keep.SetDoNotAllowTracks(True)
+    keep.SetDoNotAllowVias(True)
+    keep.Outline().AddOutline(square_chain(ox, oy, half))
+    board.Add(keep)
+    log.append("bottom thermal window: track/via keep-out for the router")
     by_name = {zone_name(z): z for z in zones}
     if PLANE_3V3 in by_name and VDD_HP_ISLAND in by_name:
         half = nm(lp.VDD_HP_ISLAND_HALF_MM + lp.ZONE_CLEARANCE_MM)
