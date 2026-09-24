@@ -124,7 +124,7 @@ ESP32P4 = _add(PartType(
     "ESP32-P4NRW32X", "ESP32-P4NRW32X", "ESP32-P4NRW32X", "Espressif Systems",
     "PCM_Espressif:ESP32-P4", "QFN-104 10x10 mm, 0.35 mm pitch, EPAD 7.5 mm",
     "Dual-core RISC-V 400 MHz SoC, 32 MB in-package PSRAM, chip rev v3.x",
-    tuple((n, nm) for n, nm, _ in p4.PADS), p4.HEIGHT_MAX_MM,
+    tuple((n, nm) for n, nm, _ in p4.PADS), p4.HEIGHT_MAX_MM, lcsc="C54540373",
     pin_source="Espressif KiCad library, symbol ESP32-P4X"))
 
 FLASH = _add(PartType(
@@ -132,7 +132,7 @@ FLASH = _add(PartType(
     "Package_SON:WSON-8-1EP_8x6mm_P1.27mm_EP3.4x4.3mm", "WSON-8 8x6 mm",
     "256 Mbit (32 MB) 3.3 V Quad-SPI NOR flash, 133 MHz, 4-byte addressing",
     _pins("~CS", "DO/IO1", "~WP/IO2", "GND", "DI/IO0", "CLK", "~HOLD/IO3", "VCC", "EP"),
-    0.80, lcsc="C97521",
+    0.80, lcsc="C97522",
     pin_source="KiCad W25Q32JVZP/W25Q128JVE (WSON-8 pin-compatible family)"))
 
 BUCK_3V3 = _add(PartType(
@@ -142,13 +142,13 @@ BUCK_3V3 = _add(PartType(
     (("1", "SW"), ("2", "SW"), ("3", "SW"), ("4", "PG"), ("5", "FB"), ("6", "AGND"),
      ("7", "FSW"), ("8", "DEF"), ("9", "SS/TR"), ("10", "AVIN"), ("11", "PVIN"),
      ("12", "PVIN"), ("13", "EN"), ("14", "VOS"), ("15", "PGND"), ("16", "PGND"),
-     ("17", "EP")), 1.00))
+     ("17", "EP")), 1.00, lcsc="C43590"))
 
 BUCK_HP = _add(PartType(
     "TLV62569DBVR", "TLV62569", "TLV62569DBVR", "Texas Instruments",
     "Package_TO_SOT_SMD:SOT-23-5", "SOT-23-5",
     "2 A buck, Espressif-verified external DCDC for ESP32-P4 VDD_HP (EN/FB driven by the SoC)",
-    _pins("EN", "GND", "SW", "VIN", "FB"), 1.45))
+    _pins("EN", "GND", "SW", "VIN", "FB"), 1.45, lcsc="C141836"))
 
 PHY = _add(PartType(
     "LAN8720A-CP-TR", "LAN8720A", "LAN8720A-CP-TR", "Microchip",
@@ -157,7 +157,7 @@ PHY = _add(PartType(
     _pins("VDD2A", "LED2/~INTSEL", "LED1/REGOFF", "XTAL2", "XTAL1/CLKIN", "VDDCR",
           "RXD1/MODE1", "RXD0/MODE0", "VDDIO", "RXER/PHYAD0", "CRS_DV/MODE2", "MDIO",
           "MDC", "~INT/REFCLKO", "~RST", "TXEN", "TXD0", "TXD1", "VDD1A", "TXN", "TXP",
-          "RXN", "RXP", "RBIAS", "VSS"), 0.90))
+          "RXN", "RXP", "RBIAS", "VSS"), 0.90, lcsc="C45223"))
 
 UART_BRIDGE = _add(PartType(
     "CP2102N-A02-GQFN24R", "CP2102N", "CP2102N-A02-GQFN24R", "Silicon Labs",
@@ -166,32 +166,46 @@ UART_BRIDGE = _add(PartType(
     _pins("~RI/CLK", "GND", "D+", "D-", "VIO", "VDD", "VREGIN", "VBUS", "~RST", "NC",
           "~WAKEUP/GPIO.3", "RS485/GPIO.2", "~RXT/GPIO.1", "~TXT/GPIO.0", "~SUSPEND",
           "NC", "SUSPEND", "~CTS", "~RTS", "RXD", "TXD", "~DSR", "~DTR", "~DCD", "GND"),
-    0.90))
+    0.90, lcsc="C969151"))
 
 ESD_USB = _add(PartType(
     "USBLC6-2SC6", "USBLC6-2SC6", "USBLC6-2SC6", "STMicroelectronics",
     "Package_TO_SOT_SMD:SOT-23-6", "SOT-23-6",
-    "2-line USB ESD protection with VBUS clamp",
-    _pins("I/O1", "GND", "I/O2", "I/O2", "VBUS", "I/O1"), 1.45, kind="diode"))
+    "2-line USB ESD with VBUS clamp (3.5 pF max: full-speed ports only)",
+    _pins("I/O1", "GND", "I/O2", "I/O2", "VBUS", "I/O1"), 1.45, kind="diode", lcsc="C7519"))
+
+ESD_USB_HS = _add(PartType(
+    "TPD2EUSB30DRTR", "TPD2EUSB30", "TPD2EUSB30DRTR", "Texas Instruments",
+    "Package_TO_SOT_SMD:Texas_DRT-3", "SOT-3 (DRT) 1.0x1.0 mm",
+    "2-channel ultra-low-capacitance ESD (0.7 pF typ) for USB 2.0 HS -- Espressif limit is 1 pF",
+    _pins("D+", "D-", "GND"), 0.60, kind="diode", lcsc="C97502"))
+
+ESD_4CH = _add(PartType(
+    "TPD4E05U06DQAR", "TPD4E05U06", "TPD4E05U06DQAR", "Texas Instruments",
+    "Package_SON:USON-10_2.5x1.0mm_P0.5mm", "USON-10 2.5x1.0 mm",
+    "4-channel 0.5 pF flow-through ESD array (microSD, UHS-I safe)",
+    _pins("D1+", "D1-", "GND", "D2+", "D2-", "NC", "NC", "GND", "NC", "NC"), 0.60,
+    kind="diode", lcsc="C138714",
+    pin_source="KiCad TPD4E05U06DQA (extends TPD4EUSB30)"))
 
 DUAL_NPN = _add(PartType(
     "MMDT3904-7-F", "MMDT3904", "MMDT3904-7-F", "Diodes Incorporated",
     "Package_TO_SOT_SMD:SOT-363_SC-70-6", "SOT-363",
     "Dual NPN for DTR/RTS auto-reset + boot-strap circuit",
-    _pins("E1", "B1", "C2", "E2", "B2", "C1"), 1.10, kind="fet",
+    _pins("E1", "B1", "C2", "E2", "B2", "C1"), 1.10, kind="fet", lcsc="C83572",
     pin_source="KiCad Q_Dual_NPN_NPN_E1B1C2E2B2C1"))
 
 NMOS = _add(PartType(
     "AO3400A", "AO3400A", "AO3400A", "Alpha & Omega Semiconductor",
     "Package_TO_SOT_SMD:SOT-23", "SOT-23",
     "30 V 5.7 A logic-level N-MOSFET (Vgs(th) 1.45 V max)",
-    _pins("G", "S", "D"), 1.25, kind="fet"))
+    _pins("G", "S", "D"), 1.25, kind="fet", lcsc="C20917"))
 
 PMOS = _add(PartType(
     "AO3401A", "AO3401A", "AO3401A", "Alpha & Omega Semiconductor",
     "Package_TO_SOT_SMD:SOT-23", "SOT-23",
     "-30 V -4 A P-MOSFET (high-side load switch)",
-    _pins("G", "S", "D"), 1.25, kind="fet"))
+    _pins("G", "S", "D"), 1.25, kind="fet", lcsc="C15127"))
 
 USB_C = _add(PartType(
     "USB4105-GF-A", "USB-C", "USB4105-GF-A", "GCT",
@@ -200,7 +214,7 @@ USB_C = _add(PartType(
     (("A1", "GND"), ("A4", "VBUS"), ("A5", "CC1"), ("A6", "D+"), ("A7", "D-"),
      ("A8", "SBU1"), ("A9", "VBUS"), ("A12", "GND"), ("B1", "GND"), ("B4", "VBUS"),
      ("B5", "CC2"), ("B6", "D+"), ("B7", "D-"), ("B8", "SBU2"), ("B9", "VBUS"),
-     ("B12", "GND"), ("S1", "SHIELD")), 3.31, kind="conn",
+     ("B12", "GND"), ("S1", "SHIELD")), 3.31, kind="conn", lcsc="C3020560",
     pin_source="KiCad USB_C_Receptacle_USB2.0_16P (shield pad named S1 in the GCT footprint)"))
 
 MICROSD = _add(PartType(
@@ -209,7 +223,7 @@ MICROSD = _add(PartType(
     "microSD socket with card-detect switch",
     (("1", "DAT2"), ("2", "DAT3/CD"), ("3", "CMD"), ("4", "VDD"), ("5", "CLK"),
      ("6", "VSS"), ("7", "DAT0"), ("8", "DAT1"), ("9", "DET_B"), ("10", "DET_A"),
-     ("11", "SHIELD")), 1.98, kind="conn",
+     ("11", "SHIELD")), 1.98, kind="conn", lcsc="C114218",
     pin_source="KiCad Micro_SD_Card_Det2 (shield pad numbering to be matched to footprint)"))
 
 # Raspberry Pi 22-pin 0.5 mm MIPI pinout (Pi 5 / CM4 / Zero camera & display).
@@ -219,26 +233,27 @@ RPI22_PINS = _pins(
     "3V3") + (("23", "MP"),)
 
 FPC22 = _add(PartType(
-    "FH12-22S-0.5SH(55)", "FPC 22P 0.5mm", "FH12-22S-0.5SH(55)", "Hirose",
-    "Connector_FFC-FPC:Hirose_FH12-22S-0.5SH_1x22-1MP_P0.50mm_Horizontal",
-    "FPC 22P 0.5 mm, horizontal, SMT", "22-pin 0.5 mm FPC (Raspberry Pi 22-pin MIPI pinout)",
-    RPI22_PINS, 2.00, kind="conn",
-    pin_source="Raspberry Pi 22-pin MIPI CSI/DSI FPC pinout (verify against the camera/panel)"))
+    "F32Q-1A7H1-11022", "FPC 22P 0.5mm", "F32Q-1A7H1-11022", "Amphenol ICC",
+    "Connector_FFC-FPC:Amphenol_F32Q-1A7x1-11022_1x22-1MP_P0.5mm_Horizontal",
+    "FPC 22P 0.5 mm, top contact, horizontal, SMT",
+    "22-pin 0.5 mm FPC, same top-contact part as Raspberry Pi 5 -> standard Pi cables, no mirroring",
+    RPI22_PINS, 2.00, kind="conn", lcsc="C3169253",
+    pin_source="raspberrypi/documentation accessories/camera (22-pin CSI); Pi 5 DSI uses the same pin positions"))
 
 RJ45 = _add(PartType(
     "HR911105A", "RJ45 MagJack", "HR911105A", "HanRun",
     "Connector_RJ:RJ45_Hanrun_HR911105A_Horizontal", "RJ45 THT, integrated magnetics + 2 LEDs",
     "RJ45 with 10/100 magnetics (1:1, CT) and green/yellow LEDs",
     (("1", "TD+"), ("2", "TD-"), ("3", "RD+"), ("4", "TCT"), ("5", "RCT"), ("6", "RD-"),
-     ("7", "NC"), ("8", "GND"), ("9", "LED_Y_K"), ("10", "LED_Y_A"), ("11", "LED_G_K"),
-     ("12", "LED_G_A"), ("SH", "SHIELD")), 13.3, kind="conn", tht=True,
-    pin_source="HanRun HR911105A datasheet -- PENDING cross-check"))
+     ("7", "NC"), ("8", "GND"), ("9", "LED_G_A"), ("10", "LED_G_K"), ("11", "LED_Y_K"),
+     ("12", "LED_Y_A"), ("SH", "SHIELD")), 13.3, kind="conn", tht=True, lcsc="C12074",
+    pin_source="KiCad RJ45_Hanrun_HR911105A_Horizontal (pins 1-8); LED pins 9-12 per two independent libraries"))
 
 FAN_HDR = _add(PartType(
     "47053-1000", "Fan 4P", "47053-1000", "Molex",
     "Connector:FanPinHeader_1x04_P2.54mm_Vertical", "2.54 mm 4-pin fan header, THT",
     "Intel 4-wire PWM fan header (1 GND, 2 +V, 3 TACH, 4 PWM)",
-    _pins("GND", "+5V", "TACH", "PWM"), 11.4, kind="conn", tht=True,
+    _pins("GND", "+5V", "TACH", "PWM"), 11.4, kind="conn", tht=True, lcsc="C240840",
     pin_source="Intel 4-wire fan specification"))
 
 HDR_2X12 = _add(PartType(
@@ -250,61 +265,67 @@ HDR_2X12 = _add(PartType(
 JST_SH2 = _add(PartType(
     "SM02B-SRSS-TB(LF)(SN)", "JST-SH 2P", "SM02B-SRSS-TB(LF)(SN)", "JST",
     "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal", "JST SH 1.0 mm 2P, SMT",
-    "Display backlight 5 V feed", (("1", "1"), ("2", "2"), ("MP", "MP")), 2.95, kind="conn"))
+    "Display backlight 5 V feed", (("1", "1"), ("2", "2"), ("MP", "MP")), 2.95, kind="conn",
+    lcsc="C160402"))
 
 XTAL40 = _add(PartType(
-    "X1E000021017711", "40MHz 10ppm", "X1E000021017711", "Epson",
-    "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", "3225 4-pad",
-    "40 MHz +/-10 ppm crystal (TSX-3225) for ESP32-P4",
-    _pins("XIN", "GND", "XOUT", "GND"), 0.60, kind="xtal",
+    "402F4001XIAR", "40MHz 10ppm", "402F4001XIAR", "CTS",
+    "Crystal:Crystal_SMD_2016-4Pin_2.0x1.6mm", "2016 4-pad",
+    "40 MHz +/-10 ppm crystal, C_L 10 pF, ESR 60 ohm max, for ESP32-P4",
+    _pins("XIN", "GND", "XOUT", "GND"), 0.50, kind="xtal", lcsc="C5508101",
     pin_source="KiCad Crystal_GND24"))
 
 XTAL25 = _add(PartType(
-    "ABM8-25.000MHZ-B2-T", "25MHz", "ABM8-25.000MHZ-B2-T", "Abracon",
+    "X322525MOB4SI", "25MHz", "X322525MOB4SI", "YXC",
     "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", "3225 4-pad",
-    "25 MHz crystal for LAN8720A (REF_CLK-out mode)",
-    _pins("XIN", "GND", "XOUT", "GND"), 0.80, kind="xtal",
+    "25 MHz +/-10 ppm / +/-20 ppm stab., C_L 12 pF -- inside the +/-50 ppm 100BASE-TX budget",
+    _pins("XIN", "GND", "XOUT", "GND"), 0.80, kind="xtal", lcsc="C9006",
     pin_source="KiCad Crystal_GND24"))
 
 SCHOTTKY = _add(PartType(
     "PMEG4050EP,115", "PMEG4050EP", "PMEG4050EP,115", "Nexperia",
     "Diode_SMD:D_SOD-128", "SOD-128",
-    "40 V 5 A low-VF Schottky -- VBUS OR-ing", _pins("K", "A"), 1.10, kind="diode"))
+    "40 V 5 A low-VF Schottky (~0.4 V @ 2.5 A) -- VBUS OR-ing", _pins("K", "A"), 1.10,
+    kind="diode", lcsc="C96235"))
 
 PTC = _add(PartType(
-    "MF-MSMF250-2", "PTC 2.5A", "MF-MSMF250-2", "Bourns",
-    "Fuse:Fuse_1812_4532Metric", "1812", "Resettable fuse, 2.5 A hold, on VSYS",
-    _pins("1", "2"), 1.10, kind="fb"))
+    "MF-MSMF250/16X-2", "PTC 2.5A", "MF-MSMF250/16X-2", "Bourns",
+    "Fuse:Fuse_1812_4532Metric", "1812", "Resettable fuse, 2.5 A hold / 5 A trip, 16 V, on VSYS",
+    _pins("1", "2"), 1.10, kind="fb", lcsc="C210838"))
 
 FERRITE = _add(PartType(
     "BLM18PG221SN1D", "220R@100MHz", "BLM18PG221SN1D", "Murata",
     "Inductor_SMD:L_0603_1608Metric", "0603", "Ferrite bead 220 ohm, 1.4 A",
-    _pins("1", "2"), 0.80, kind="fb"))
+    _pins("1", "2"), 0.80, kind="fb", lcsc="C80165"))
 
 IND_3V3 = _add(PartType(
     "XAL5030-222MEC", "2.2uH", "XAL5030-222MEC", "Coilcraft",
-    "Inductor_SMD:L_Coilcraft_XAL5030", "5.3x5.5 mm shielded",
-    "2.2 uH, Isat > 8 A, DCR ~15 mOhm -- 3 A buck inductor",
-    _pins("1", "2"), 3.10, kind="ind"))
+    "Inductor_SMD:L_Coilcraft_XAL5030-XXX", "5.3x5.5 mm shielded",
+    "2.2 uH, Isat 9.2 A, DCR 14.5 mOhm -- 3 A buck inductor",
+    _pins("1", "2"), 3.10, kind="ind", lcsc="C920280"))
 
 IND_HP = _add(PartType(
     "DFE252012F-2R2M=P2", "2.2uH", "DFE252012F-2R2M=P2", "Murata",
-    "Inductor_SMD:L_Murata_DFE252012F", "2520 metal", "2.2 uH power inductor for VDD_HP buck",
-    _pins("1", "2"), 1.20, kind="ind"))
+    "Inductor_SMD:L_Murata_DFE252012F", "2520 metal",
+    "2.2 uH, Isat 3.3 A, 82 mOhm -- VDD_HP buck inductor",
+    _pins("1", "2"), 1.20, kind="ind", lcsc="C576403"))
 
 TACT = _add(PartType(
     "PTS810SJM250SMTRLFS", "Tactile", "PTS810SJM250SMTRLFS", "C&K",
     "Button_Switch_SMD:SW_SPST_PTS810", "4.2x3.2 mm SMD", "SMD tactile switch",
     _pins("1", "2"), 2.50, kind="sw",
+    lcsc="C116501",
     pin_source="KiCad SW_SPST_PTS810 footprint: 2 terminals, each on two pads ('1','1','2','2')"))
 
 LED_G = _add(PartType(
     "150060GS75000", "Green", "150060GS75000", "Wurth Elektronik",
-    "LED_SMD:LED_0603_1608Metric", "0603", "Green LED", _pins("K", "A"), 0.80, kind="led"))
+    "LED_SMD:LED_0603_1608Metric", "0603", "Green LED", _pins("K", "A"), 0.80, kind="led",
+    lcsc="C5252984"))
 
 LED_R = _add(PartType(
     "150060RS75000", "Red", "150060RS75000", "Wurth Elektronik",
-    "LED_SMD:LED_0603_1608Metric", "0603", "Red LED", _pins("K", "A"), 0.80, kind="led"))
+    "LED_SMD:LED_0603_1608Metric", "0603", "Red LED", _pins("K", "A"), 0.80, kind="led",
+    lcsc="C3030991"))
 
 MH_M25 = _add(PartType(
     "MH-M2.5", "M2.5", "", "", "MountingHole:MountingHole_2.7mm_M2.5_Pad_Via",
@@ -325,9 +346,9 @@ _RES_CODE = {
 _CAP_MPN = {
     # (value, size): (mpn, rating/dielectric, height)
     ("10pF", "0402"): ("CL05C100CB5NNNC", "50V C0G", 0.55),
-    ("15pF", "0402"): ("CL05C150JB5NNNC", "50V C0G", 0.55),
+    ("12pF", "0402"): ("CL05C120JB5NNNC", "50V C0G", 0.55),
+    ("18pF", "0402"): ("CL05C180JB5NNNC", "50V C0G", 0.55),
     ("22pF", "0402"): ("CL05C220JB5NNNC", "50V C0G", 0.55),
-    ("27pF", "0402"): ("CL05C270JB5NNNC", "50V C0G", 0.55),
     ("100pF", "0402"): ("CL05C101JB5NNNC", "50V C0G", 0.55),
     ("470pF", "0402"): ("CL05B471KB5NNNC", "50V X7R", 0.55),
     ("3.3nF", "0402"): ("CL05B332KB5NNNC", "50V X7R", 0.55),
@@ -343,6 +364,16 @@ _CAP_MPN = {
 
 _METRIC = {"0402": "1005", "0603": "1608", "0805": "2012"}
 
+# LCSC numbers confirmed by the MPN verification pass (blank = not found on LCSC).
+_LCSC = {
+    "CL05B104KO5NNNC": "C1525", "CL05B103KB5NNNC": "C15195", "CL05A105KA5NQNC": "C52923",
+    "CL05A106MQ5NUNC": "C15525", "CL05A475MP5NRNC": "C23733", "CL05C220JB5NNNC": "C70464",
+    "CL05B471KB5NNNC": "C26412", "CL05B332KB5NNNC": "C26404", "CL21A226MQQNNNE": "C5674",
+    "CL21A106KAYNNNE": "C15850", "CL21A476MQYNNNE": "C16780", "CL05C180JB5NNNC": "C307443",
+    "RC0402FR-0710KL": "C60490", "RC0402FR-0749R9L": "C87044", "RC0402FR-071KL": "C106235",
+    "RC0402JR-070RL": "C60485",
+}
+
 
 def _res_part(value: str, size: str = "0402") -> PartType:
     key = f"R_{value}_{size}"
@@ -354,7 +385,7 @@ def _res_part(value: str, size: str = "0402") -> PartType:
         key, value if value != "0" else "0R", mpn, "YAGEO",
         f"Resistor_SMD:R_{size}_{_METRIC[size]}Metric", size,
         "Thick-film resistor, " + ("jumper" if code is None else "1 %, 1/16 W"),
-        _pins("1", "2"), 0.40 if size == "0402" else 0.55, kind="res"))
+        _pins("1", "2"), 0.40 if size == "0402" else 0.55, kind="res", lcsc=_LCSC.get(mpn, "")))
 
 
 def _cap_part(value: str, size: str = "0402") -> PartType:
@@ -365,7 +396,7 @@ def _cap_part(value: str, size: str = "0402") -> PartType:
     return _add(PartType(
         key, value, mpn, "Samsung Electro-Mechanics",
         f"Capacitor_SMD:C_{size}_{_METRIC[size]}Metric", size,
-        f"MLCC {value} {rating}", _pins("1", "2"), h, kind="cap"))
+        f"MLCC {value} {rating}", _pins("1", "2"), h, kind="cap", lcsc=_LCSC.get(mpn, "")))
 
 
 # ===========================================================================
@@ -391,7 +422,8 @@ GPIO_MAP: tuple[GpioUse, ...] = (
     GpioUse(31, "ETH_MDC", "EMAC SMI MDC", "Ethernet", "GPIO matrix",
             "ESP-IDF default MDC pin"),
     GpioUse(34, "RMII_TXD0", "EMAC RMII_TXD0", "Ethernet", "IO_MUX",
-            "Strapping pin; PHY input only, never driven at reset"),
+            "Strap: JTAG source select, only if EFUSE_JTAG_SEL_ENABLE is burned (default: ignored); "
+            "PHY input, never driven at reset"),
     GpioUse(35, "RMII_TXD1", "EMAC RMII_TXD1 + BOOT strap", "Ethernet / Boot", "IO_MUX",
             "Boot strap: 10k pull-up, BOOT button + auto-program NPN to GND"),
     GpioUse(49, "RMII_TX_EN", "EMAC RMII_TX_EN", "Ethernet", "IO_MUX"),
@@ -441,13 +473,13 @@ GPIO_MAP: tuple[GpioUse, ...] = (
     GpioUse(36, "STRAP_GPIO36", "Download-mode qualifier strap", "Boot", "Strap",
             "10k pull-up, otherwise unused (must read 1 for joint-download boot)"),
     # --- Expansion header (J6) ---
-    GpioUse(0, "GPIO0", "Header (LP GPIO, XTAL_32K capable)", "Header", "GPIO"),
-    GpioUse(1, "GPIO1", "Header (LP GPIO, XTAL_32K capable)", "Header", "GPIO"),
-    GpioUse(2, "GPIO2", "Header (LP GPIO, pad-JTAG capable)", "Header", "GPIO",
+    GpioUse(0, "GPIO0", "Header (LP GPIO / XTAL_32K_N)", "Header", "GPIO"),
+    GpioUse(1, "GPIO1", "Header (LP GPIO / XTAL_32K_P)", "Header", "GPIO"),
+    GpioUse(2, "GPIO2", "Header (LP GPIO / pad-JTAG MTCK)", "Header", "GPIO",
             "Weak pull-up after reset"),
-    GpioUse(3, "GPIO3", "Header (LP GPIO, pad-JTAG capable)", "Header", "GPIO"),
-    GpioUse(4, "GPIO4", "Header (LP GPIO, pad-JTAG capable)", "Header", "GPIO"),
-    GpioUse(5, "GPIO5", "Header (LP GPIO, pad-JTAG capable)", "Header", "GPIO"),
+    GpioUse(3, "GPIO3", "Header (LP GPIO / pad-JTAG MTDI)", "Header", "GPIO"),
+    GpioUse(4, "GPIO4", "Header (LP GPIO / pad-JTAG MTMS)", "Header", "GPIO"),
+    GpioUse(5, "GPIO5", "Header (LP GPIO / pad-JTAG MTDO)", "Header", "GPIO"),
     GpioUse(14, "LP_UART_TXD", "Header - LP UART TXD", "Header", "IO_MUX"),
     GpioUse(15, "LP_UART_RXD", "Header - LP UART RXD", "Header", "IO_MUX"),
     GpioUse(16, "GPIO16", "Header - ADC1_CH0", "Header", "GPIO"),
@@ -620,8 +652,10 @@ R("0", "XTAL_N", "XTAL_N_Y", "Clock", place=Near("U1", "99", 2.0), note="Espress
 add("Y1", XTAL40, {"XIN": "XTAL_P_Y", "XOUT": "XTAL_N_Y", "2": GND, "4": GND}, "Clock",
     place=Place(-3.5, -15.0, 0.0),
     note="Outside keep-out; Espressif requires >= 4.5 mm from the clock pads, no vias on XTAL traces")
-C("15pF", "XTAL_P_Y", GND, "Clock", place=Near("Y1", "1", 2.0), note="C_L = 10 pF crystal")
-C("15pF", "XTAL_N_Y", GND, "Clock", place=Near("Y1", "3", 2.0), note="C_L = 10 pF crystal")
+C("12pF", "XTAL_P_Y", GND, "Clock", place=Near("Y1", "1", 2.0),
+  note="C_L 10 pF, ~4 pF stray incl. the 10 mm trace; tune on first article")
+C("12pF", "XTAL_N_Y", GND, "Clock", place=Near("Y1", "3", 2.0),
+  note="C_L 10 pF, ~4 pF stray incl. the 10 mm trace; tune on first article")
 
 # ------------------------------------------------------------- U2 Flash ---
 _G = "QSPI flash"
@@ -653,7 +687,7 @@ _G = "Power input"
 for _i, (_vb, _pos) in enumerate((("VBUS1", (29.0, 30.0)), ("VBUS2", (-42.0, 30.0)),
                                   ("VBUS3", (-31.0, 30.0))), start=1):
     add(f"D{_i}", SCHOTTKY, {"A": _vb, "K": "VSYS_OR"}, _G, place=Place(*_pos, 0.0),
-        note="VBUS OR-ing (no back-feed between ports)")
+        note="VBUS OR-ing (no back-feed); ~1 W at 2.5 A -> >= 100 mm^2 copper on both pads")
 add("F1", PTC, {"1": "VSYS_OR", "2": "VSYS_5V"}, _G, place=Place(-38.0, 24.0, 0.0))
 C("10uF", "VSYS_5V", GND, _G, size="0805", place=Near("F1", "2"))
 
@@ -665,7 +699,7 @@ add("U3", BUCK_3V3, {"PG": "BUCK_PG", "FB": "BUCK_FB", "AGND": GND,
                      "15": GND, "16": GND, "EP": GND, "1": "BUCK_SW", "2": "BUCK_SW",
                      "3": "BUCK_SW"}, _G,
     place=Place(-38.0, 14.0, 0.0),
-    note="FSW=GND -> 2.5 MHz, DEF=GND -> nominal Vout")
+    note="FSW=GND -> 2.5 MHz (FSW must be low at start-up), DEF=GND -> nominal Vout")
 add("L1", IND_3V3, {"1": "BUCK_SW", "2": "+3V3"}, _G, place=Place(-31.0, 14.0, 0.0))
 C("10uF", "VSYS_5V", GND, _G, size="0805", place=Near("U3", "11"))
 C("10uF", "VSYS_5V", GND, _G, size="0805", place=Near("U3", "12"))
@@ -689,6 +723,7 @@ R("1k", "+3V3", "LED_PWR_A", "UI", place=Near("D4", "2"))
 
 def usb_port(ref: str, vbus: str, dp: str, dm: str, esd: PartType, esd_ref: str,
              group: str, place: Place) -> None:
+    """USB-C UFP: 5.1k Rd on each CC, ESD at the connector, 10 uF on VBUS."""
     add(ref, USB_C, {"A4": vbus, "A9": vbus, "B4": vbus, "B9": vbus,
                      "A6": dp, "B6": dp, "A7": dm, "B7": dm,
                      "A5": f"{ref}_CC1", "B5": f"{ref}_CC2",
@@ -696,14 +731,17 @@ def usb_port(ref: str, vbus: str, dp: str, dm: str, esd: PartType, esd_ref: str,
         place=place)
     R("5.1k", f"{ref}_CC1", GND, group, place=Near(ref, "A5"), note="UFP Rd")
     R("5.1k", f"{ref}_CC2", GND, group, place=Near(ref, "B5"), note="UFP Rd")
-    add(esd_ref, esd, {"1": dp, "6": dp, "3": dm, "4": dm, "VBUS": vbus, "GND": GND},
-        group, place=Near(ref, "A6", 5.0))
+    if esd is ESD_USB:           # USBLC6-2SC6: flow-through, VBUS clamp
+        esd_conns = {"1": dp, "6": dp, "3": dm, "4": dm, "VBUS": vbus, "GND": GND}
+    else:                        # TPD2EUSB30: D+, D-, GND
+        esd_conns = {"D+": dp, "D-": dm, "GND": GND}
+    add(esd_ref, esd, esd_conns, group, place=Near(ref, "A6", 5.0))
     C("10uF", vbus, GND, group, size="0805", place=Near(ref, "A4"))
 
 
 # J1: native USB 2.0 High-Speed OTG (UTMI PHY)
 _G = "USB1 HS"
-usb_port("J1", "VBUS1", "USB1_DP", "USB1_DM", ESD_USB, "U7", _G,
+usb_port("J1", "VBUS1", "USB1_DP", "USB1_DM", ESD_USB_HS, "U7", _G,
          Place(29.0, 36.0, 0.0, faces="bottom"))
 R("0", "USB1_DP", "USBHS_DP", _G, place=Near("U1", "50", 2.5), note="Espressif: reserve R/C near SoC")
 R("0", "USB1_DM", "USBHS_DM", _G, place=Near("U1", "49", 2.5), note="Espressif: reserve R/C near SoC")
@@ -760,8 +798,8 @@ for _net, _pad in (("RMII_RXD0", "8"), ("RMII_RXD1", "7"), ("RMII_CRS_DV", "11")
       place=Near("U5", _pad), note="Source termination at PHY")
 add("Y2", XTAL25, {"XIN": "PHY_XI", "XOUT": "PHY_XO", "2": GND, "4": GND}, _G,
     place=Place(22.0, 9.5, 0.0))
-C("27pF", "PHY_XI", GND, _G, place=Near("Y2", "1"), note="C_L = 18 pF crystal")
-C("27pF", "PHY_XO", GND, _G, place=Near("Y2", "3"), note="C_L = 18 pF crystal")
+C("18pF", "PHY_XI", GND, _G, place=Near("Y2", "1"), note="C_L = 12 pF: 2 x (12 - 3 pF stray)")
+C("18pF", "PHY_XO", GND, _G, place=Near("Y2", "3"), note="C_L = 12 pF: 2 x (12 - 3 pF stray)")
 R("12.1k", "PHY_RBIAS", GND, _G, place=Near("U5", "24", 2.0), note="RBIAS 1 %")
 R("10k", "PHY_LED2", GND, _G, place=Near("U5", "2"), note="nINTSEL = 0 -> REF_CLK-out (50 MHz on pin 14)")
 R("10k", "PHY_RXER", GND, _G, place=Near("U5", "10"), note="PHYAD0 = 0")
@@ -809,6 +847,12 @@ add("Q2", PMOS, {"G": "SD_PWR_EN", "S": "+3V3", "D": "SD_VDD"}, _G, place=Near("
 R("10k", "SD_PWR_EN", GND, _G, place=Near("Q2", "1"), note="Card powered by default")
 R("10k", "+3V3", "SD_DET", _G, place=Near("J5", "10"))
 C("10uF", "SD_VDD", GND, _G, size="0805", place=Near("J5", "4"))
+add("U10", ESD_4CH, {"D1+": "SD_D0_C", "D1-": "SD_D1_C", "D2+": "SD_D2_C", "D2-": "SD_D3_C",
+                     "3": GND, "8": GND}, _G, place=Near("J5", "7", 6.0),
+    note="Flow-through TVS, 0.5 pF (UHS-I safe)")
+add("U11", ESD_4CH, {"D1+": "SD_CLK_C", "D1-": "SD_CMD_C", "D2+": "SD_DET",
+                     "3": GND, "8": GND}, _G, place=Near("J5", "5", 6.0),
+    note="Flow-through TVS; channel D2- unused")
 C("100nF", "SD_VDD", GND, _G, place=Near("J5", "4", 2.0))
 
 # -------------------------------------------------- Camera (MIPI CSI-2) ---
