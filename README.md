@@ -66,5 +66,5 @@ Source location: https://github.com/Andreuxxx1977/esp32-p4
 
 As per CERN-OHL-S v2 section 4, should You produce hardware based on this source, You must where
 practicable maintain the Source Location visible on the external case of the product or other products
-you make using this source. It must also stay visible on the PCB silkscreen, which the placement script
-adds.
+you make using this source. The placement script also prints the source location and licence on the
+PCB silkscreen.
