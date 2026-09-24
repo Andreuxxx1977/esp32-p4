@@ -2,7 +2,7 @@
   (version "D")
   (design
     (source "esp32p4_extreme_netlist.py")
-    (date "09/24/2026 11:52 AM")
+    (date "09/24/2026 01:26 PM")
     (tool "SKiDL (2.3.0)")
     (sheet
       (number 1)
@@ -441,7 +441,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 62 VDD_IO_4")
+          (name "Note") "U1 pad 62 VDD_IO_4 (bottom side)")
         (field
           (name "Description") "MLCC 1uF 25V X5R")
         (field
@@ -473,7 +473,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 67 VDD_PSRAM_1")
+          (name "Note") "U1 pad 67 VDD_PSRAM_1 (bottom side)")
         (field
           (name "Description") "MLCC 100nF 16V X7R")
         (field
@@ -537,7 +537,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 71 VDDO_FLASH")
+          (name "Note") "U1 pad 71 VDDO_FLASH (bottom side)")
         (field
           (name "Description") "MLCC 1uF 25V X5R")
         (field
@@ -633,7 +633,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 74 VDDO_4")
+          (name "Note") "U1 pad 74 VDDO_4 (bottom side)")
         (field
           (name "Description") "MLCC 1uF 25V X5R")
         (field
@@ -697,7 +697,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 75 VDD_LDO")
+          (name "Note") "U1 pad 75 VDD_LDO (bottom side)")
         (field
           (name "Description") "MLCC 10uF 6.3V X5R")
         (field
@@ -729,7 +729,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 76 VDD_HP_2")
+          (name "Note") "U1 pad 76 VDD_HP_2 (bottom side)")
         (field
           (name "Description") "MLCC 100nF 16V X7R")
         (field
@@ -825,7 +825,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 76 VDD_HP_2")
+          (name "Note") "U1 pad 76 VDD_HP_2 (bottom side)")
         (field
           (name "Description") "MLCC 10uF 6.3V X5R")
         (field
@@ -889,7 +889,7 @@
         (field
           (name "Group") "SoC decoupling")
         (field
-          (name "Note") "U1 pad 77 VDD_DCDCC")
+          (name "Note") "U1 pad 77 VDD_DCDCC (bottom side)")
         (field
           (name "Description") "MLCC 10uF 6.3V X5R")
         (field
@@ -3301,6 +3301,8 @@
         (field
           (name "Group") "Ethernet")
         (field
+          (name "Note") "Footprint origin = pin 1 (not the body centre); rotated so the jack faces the right edge")
+        (field
           (name "Description") "RJ45 with 10/100 magnetics (1:1, CT) and green/yellow LEDs")
         (field
           (name "Footprint") "Connector_RJ:RJ45_Hanrun_HR911105A_Horizontal")
@@ -3359,7 +3361,7 @@
         (field
           (name "Group") "Header")
         (field
-          (name "Note") "Footprint origin = pin 1; rows run +Y to y = +0.9 mm")
+          (name "Note") "Footprint origin = pin 1; rows run +Y to y = +0.8 mm")
         (field
           (name "Description") "2x12 expansion header")
         (field
@@ -10283,7 +10285,7 @@
         (pintype "PASSIVE")))
     (net
       (code 147)
-      (name "USB1_DM")
+      (name "USB1_D_N")
       (class "USB_90,Default")
       (node
         (ref "J1")
@@ -10303,7 +10305,7 @@
         (pintype "PASSIVE")))
     (net
       (code 148)
-      (name "USB1_DP")
+      (name "USB1_D_P")
       (class "USB_90,Default")
       (node
         (ref "J1")
@@ -10323,7 +10325,7 @@
         (pintype "PASSIVE")))
     (net
       (code 149)
-      (name "USB2_DM")
+      (name "USB2_D_N")
       (class "USB_90,Default")
       (node
         (ref "J2")
@@ -10347,7 +10349,7 @@
         (pintype "PASSIVE")))
     (net
       (code 150)
-      (name "USB2_DP")
+      (name "USB2_D_P")
       (class "USB_90,Default")
       (node
         (ref "J2")
@@ -10371,7 +10373,7 @@
         (pintype "PASSIVE")))
     (net
       (code 151)
-      (name "USB3_DM")
+      (name "USB3_D_N")
       (class "USB_90,Default")
       (node
         (ref "J3")
@@ -10395,7 +10397,7 @@
         (pintype "PASSIVE")))
     (net
       (code 152)
-      (name "USB3_DP")
+      (name "USB3_D_P")
       (class "USB_90,Default")
       (node
         (ref "J3")
@@ -10419,7 +10421,7 @@
         (pintype "PASSIVE")))
     (net
       (code 153)
-      (name "USBHS_DM")
+      (name "USBHS_D_N")
       (class "USB_90,Default")
       (node
         (ref "R29")
@@ -10431,7 +10433,7 @@
         (pintype "BIDIRECTIONAL")))
     (net
       (code 154)
-      (name "USBHS_DP")
+      (name "USBHS_D_P")
       (class "USB_90,Default")
       (node
         (ref "R10")
@@ -10447,7 +10449,7 @@
         (pintype "BIDIRECTIONAL")))
     (net
       (code 155)
-      (name "USJ_DM")
+      (name "USJ_D_N")
       (class "USB_90,Default")
       (node
         (ref "R40")
@@ -10459,7 +10461,7 @@
         (pintype "BIDIRECTIONAL")))
     (net
       (code 156)
-      (name "USJ_DP")
+      (name "USJ_D_P")
       (class "USB_90,Default")
       (node
         (ref "R39")

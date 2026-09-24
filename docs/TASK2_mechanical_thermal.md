@@ -9,11 +9,11 @@ All coordinates, dimensions and part data are read from `hardware/lib/board_spec
 | Path | Stack | Key numbers (from the spec) |
 | --- | --- | --- |
 | (a) Top | SoC mould top -> 0.1 mm phase-change pad (e.g. Laird Tpcm 580) -- flush on SoC lid -> 25 x 25 x 10 mm heatsink (Al 6063-T5, black anodised) -> 5 V PWM fan (impinging, radial exhaust over the board) | SoC seated height 0.90 mm; tallest part allowed in the keep-out 0.60 mm (rule) / 0.55 mm (actual, 86 x 0402 passives around U1) -> air gap under the heatsink base >= 0.35 mm (0.30 mm by rule), 0.45 mm with the uncompressed TIM |
-| (b) Bottom | EPAD 7.5 mm -> 7x7 vias 0.30/0.60 mm @ 1.0 mm (VIPPO) -> L2 GND plane + 14 x 14 mm exposed B.Cu spreader -> optional bottom gap pad / chassis | array extent 6.6 mm inside the 7.5 mm EPAD; fill: IPC-4761 Type VII (resin-filled + copper-capped, VIPPO) |
+| (b) Bottom | EPAD 7.5 mm -> 7x7 vias 0.30/0.60 mm @ 1.0 mm (VIPPO) -> L2 GND plane + 14 x 14 mm B.Cu spreader (6.6 x 6.6 mm exposed window) -> optional bottom gap pad / chassis | array extent 6.6 mm inside the 7.5 mm EPAD; fill: IPC-4761 Type VII (resin-filled + copper-capped, VIPPO) |
 
 The heatsink sits flush on the SoC lid: nothing inside the 25 x 25 mm keep-out is taller than 0.55 mm, so the base clears every 0402 by >= 0.35 mm. Black anodising is not a guaranteed insulator -- the gap is the insulation, and the 4-point spring clamp keeps the base parallel to the board.
 
-The 14 x 14 mm B.Cu spreader size is a TASK 2 assumption (`SPREADER_MM` in tools/gen_docs.py); it is not yet a constant in board_spec -- PENDING until the placer/router owns it.
+Assembly is double-sided: 8 decoupling caps (C20, C21, C23, C26, C28, C29, C31, C33) sit on the bottom under the SoC's right-hand pad ring, outside the thermal-via field. So only the via field is left mask-free (6.6 x 6.6 mm, `BOTTOM_THERMAL_WINDOW_MM`); the rest of the 14 x 14 mm spreader copper (`BOTTOM_SPREADER_MM`) is under solder mask. A bottom gap pad or bracket must clear those 0402s (<= 0.55 mm) or be cut to the window.
 
 ### 1.1 Via-array thermal resistance
 
@@ -55,7 +55,7 @@ Espressif does not publish a theta-JC, theta-JB or maximum package dissipation f
 | Heatsink theta-SA, natural | 29.9 K/W | h = 12 W/m^2.K, eta = 0.95 |
 | Board -> air, fan exhaust | 10.2 K/W | 2 x board area, 30% effective, top h = 25 |
 | Board -> air, natural | 15.8 K/W | h = 12 W/m^2.K |
-| Optional gap pad to chassis | 1.70 K/W + chassis | 1.0 mm, 3.0 W/m.K on the 14 mm spreader |
+| Optional gap pad to chassis | 7.65 K/W + chassis | 1.0 mm, 3.0 W/m.K on the 6.6 mm exposed window |
 
 | Scenario | R top (K/W) | R bottom (K/W) | R j-a (K/W) | Share via EPAD | dT j-a @ 1.55 W | dT j-a @ 2.0 W | Tj @ 2.0 W, Ta 40 C | dT across vias @ 2.0 W |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -92,7 +92,7 @@ Design origin = U1 body centre; KiCad axes (+X right, +Y down); mm. Part coordin
 | H6 (board, M3) | (51.0, -36.0) | Board mounting hole (GND) |
 | H7 (board, M3) | (-51.0, 36.0) | Board mounting hole (GND) |
 | H8 (board, M3) | (51.0, 36.0) | Board mounting hole (GND) |
-| FID1 | (-52.0, 32.0) | fiducial |
+| FID1 | (-52.1, 31.4) | fiducial |
 | FID2 | (52.0, 28.0) | fiducial |
 | FID3 | (47.0, -24.0) | fiducial |
 
@@ -111,23 +111,23 @@ Design origin = U1 body centre; KiCad axes (+X right, +Y down); mm. Part coordin
 | J1 | USB-C | (22.0, 36.0) | 0 | 3.31 | 25.3 | H4 22.1 | bottom: 4.0 | OK |
 | J2 | USB-C | (-51.0, 22.0) | 0 | 3.31 | 39.7 | H3 36.7 | left: 4.0 | OK |
 | J3 | USB-C | (-51.0, 8.0) | 0 | 3.31 | 38.5 | H3 36.7 | left: 4.0 | OK |
-| J4 | RJ45 MagJack | (46.0, 3.0) | 0 | 13.30 | 33.5 | H4 33.2 | right: 9.0 | OK |
+| J4 | RJ45 MagJack | (37.2, 3.0) | 0 | 13.30 | 24.7 | H4 25.3 | right: 17.8 | OK |
 | J5 | microSD | (6.0, -31.0) | 0 | 1.98 | 18.5 | H2 18.4 | top: 9.0 | OK |
-| J6 | 2x12 header | (-50.5, -27.0) | 0 | 8.50 | 40.7 | H1 37.5 | 4.5 | OK |
+| J6 | 2x12 header | (-50.5, -27.1) | 0 | 8.50 | 40.7 | H1 37.5 | 4.5 | OK |
 | J7 | Fan 4P | (-30.0, -30.0) | 0 | 11.40 | 24.7 | H1 21.2 | 10.0 | OK |
 | J8 | JST-SH 2P | (-28.0, 36.5) | 0 | 2.95 | 28.6 | H3 25.1 | bottom: 3.5 | OK |
 | J9 | 2x8 header | (24.0, -35.0) | 90 | 8.50 | 25.3 | H2 21.9 | 5.0 | OK |
 | J_CAM | FPC 22P 0.5mm | (6.0, 35.0) | 0 | 2.00 | 22.5 | H4 21.9 | bottom: 5.0 | OK |
 | J_DSI | FPC 22P 0.5mm | (-14.0, 35.0) | 0 | 2.00 | 22.5 | H3 20.0 | bottom: 5.0 | OK |
 | L1 | 2.2uH | (-27.0, 20.0) | 0 | 3.10 | 16.3 | H3 13.0 | 20.0 | OK |
-| L2 | 2.2uH | (20.0, -8.5) | 0 | 1.20 | 7.5 | H2 8.2 | 31.5 | OK |
+| L2 | 2.2uH | (20.6, -8.5) | 0 | 1.20 | 8.1 | H2 8.5 | 31.5 | OK |
 | SW1 | Tactile | (-40.0, -35.0) | 0 | 2.50 | 35.5 | H1 32.0 | 5.0 | OK |
-| SW2 | Tactile | (-33.0, -35.0) | 0 | 2.50 | 30.4 | H1 26.9 | 5.0 | OK |
+| SW2 | Tactile | (-33.0, -35.1) | 0 | 2.50 | 30.5 | H1 27.0 | 4.9 | OK |
 | U2 | W25Q256JV 32MB | (-20.0, 5.0) | 90 | 0.80 | 7.5 | H3 11.2 | 35.0 | OK |
 | U3 | TPS62130 | (-34.0, 18.0) | 0 | 1.00 | 22.2 | H3 19.2 | 21.0 | OK |
 | U4 | TLV62569 | (16.5, -7.5) | 0 | 1.45 | 4.0 | H2 7.6 | 32.5 | OK |
 | U5 | LAN8720A | (22.0, 3.0) | 0 | 0.90 | 9.5 | H4 13.9 | 33.0 | OK |
-| U6 | CP2102N | (-42.0, 19.0) | 0 | 0.90 | 30.2 | H3 27.3 | 13.0 | OK |
+| U6 | CP2102N | (-39.5, 19.0) | 0 | 0.90 | 27.8 | H3 24.9 | 15.5 | OK |
 | Y1 | 40MHz 10ppm | (-3.5, -15.0) | 0 | 0.50 | 2.5 | H1 11.5 | 25.0 | OK |
 | Y2 | 25MHz | (22.0, 9.5) | 0 | 0.80 | 9.5 | H4 8.9 | 30.5 | OK |
 
@@ -142,7 +142,7 @@ Flag thresholds: a part origin closer than 3.5 mm (`HEATSINK_HOLE_KEEPOUT_R`) to
 | H1 | (-15.0, -15.0) | 3.54 | J7 21.2 | C55 7.0 | SoC crystal 11.5 | OK |
 | H2 | (15.0, -15.0) | 3.54 | J5 18.4 | U4 7.6 | SDIO (SDMMC slot 0) 10.7 | OK |
 | H3 | (-15.0, 15.0) | 3.54 | J_DSI 20.0 | U2 11.2 | MIPI DSI 9.0 | OK |
-| H4 | (15.0, 15.0) | 3.54 | J_CAM 21.9 | C56 7.0 | USB 2.0 HS 4.7 | OK |
+| H4 | (15.0, 15.0) | 3.54 | J_CAM 21.9 | C56 7.0 | MIPI CSI 11.7 | OK |
 
 (i) The hole keep-out circle (r = 3.5 mm) clears the keep-out corner by 0.04 mm.
 
@@ -153,9 +153,9 @@ Flag thresholds: a part origin closer than 3.5 mm (`HEATSINK_HOLE_KEEPOUT_R`) to
 | J1 | USB-C | (22.0, 36.0) | 3.3 | 63.0 | 51.5 | 42.5 | 22.1 |
 | J2 | USB-C | (-51.0, 22.0) | 3.3 | 51.6 | 75.7 | 36.7 | 66.4 |
 | J3 | USB-C | (-51.0, 8.0) | 3.3 | 42.7 | 69.9 | 36.7 | 66.4 |
-| J4 | RJ45 MagJack | (46.0, 3.0) | 13.3 | 63.6 | 35.8 | 62.2 | 33.2 |
+| J4 | RJ45 MagJack | (37.2, 3.0) | 13.3 | 55.3 | 28.6 | 53.6 | 25.3 |
 | J5 | microSD | (6.0, -31.0) | 2.0 | 26.4 | 18.4 | 50.6 | 46.9 |
-| J6 | 2x12 header | (-50.5, -27.0) | 8.5 | 37.5 | 66.6 | 55.0 | 77.8 |
+| J6 | 2x12 header | (-50.5, -27.1) | 8.5 | 37.5 | 66.6 | 55.1 | 77.9 |
 | J7 | Fan 4P | (-30.0, -30.0) | 11.4 | 21.2 | 47.4 | 47.4 | 63.6 |
 | J8 | JST-SH 2P | (-28.0, 36.5) | 3.0 | 53.1 | 67.1 | 25.1 | 48.1 |
 | J9 | 2x8 header | (24.0, -35.0) | 8.5 | 43.8 | 21.9 | 63.4 | 50.8 |
@@ -168,14 +168,11 @@ Flag thresholds: a part origin closer than 3.5 mm (`HEATSINK_HOLE_KEEPOUT_R`) to
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | MIPI DSI | U1 pads 35-40 | (-0.7, 4.9) | J_DSI (-14.0, 35.0) | 32.9 | 24.5 | 25.3 | 9.0 | 18.5 | OK |
 | MIPI CSI | U1 pads 42-47 | (1.7, 4.9) | J_CAM (6.0, 35.0) | 30.4 | 26.0 | 23.9 | 18.0 | 11.7 | OK |
-| USB 2.0 HS | U1 pads 49-50 | (3.5, 4.9) | J1 (22.0, 36.0) | 36.2 | 27.2 | 23.0 | 21.1 | 4.7 | OK |
-| USB Serial/JTAG (FS) | U1 pads 52-53 | (4.6, 4.6) | J3 (-51.0, 8.0) | 55.7 | 20.8 | 22.2 | 9.2 | 14.7 | OK |
 | SDIO (SDMMC slot 0) | U1 pads 80-84, 86 | (3.1, -4.9) | J5 (6.0, -31.0) | 26.3 | 19.1 | 10.7 | 26.9 | 23.2 | OK |
 | RMII | U1 pads 57-58, 60, 65-66, 92-93 | (3.4, -0.3) | U5 (22.0, 3.0) | 18.9 | 23.5 | 16.5 | 23.9 | 13.0 | OK |
 | QSPI flash | U1 pads 27-29, 31-33 | (-3.3, 4.9) | U2 (-20.0, 5.0) | 16.7 | 20.0 | 27.0 | 10.0 | 20.9 | OK |
 | SoC crystal | U1 pads 99-100 | (-2.8, -4.9) | Y1 (-3.5, -15.0) | 10.1 | 11.5 | 18.5 | 23.3 | 26.7 | OK |
-| Ethernet MDI (PHY -> RJ45) | U5 | (22.0, 3.0) | J4 (46.0, 3.0) | 24.0 | 41.1 | 19.3 | 38.9 | 13.9 | OK |
-| USB FS debug (USB-C -> CP2102N) | J2 | (-51.0, 22.0) | U6 (-42.0, 19.0) | 9.5 | 43.4 | 66.4 | 27.3 | 57.1 | OK |
+| Ethernet MDI (PHY -> RJ45) | U5 | (22.0, 3.0) | J4 (37.2, 3.0) | 15.2 | 41.1 | 19.3 | 38.9 | 13.9 | OK |
 
 ### 5.4 Other parts vs the hole keep-out
 
@@ -191,12 +188,12 @@ Assumed clear radius: M3 washer 3.5 mm (+1 mm margin); fiducial 3.0 mm (1 mm cop
 
 | Feature | x, y | Nearest part origin (mm) | Status |
 | --- | --- | --- | --- |
-| H5 | (-51.0, -36.0) | J6 9.0 | OK |
+| H5 | (-51.0, -36.0) | J6 8.9 | OK |
 | H6 | (51.0, -36.0) | J9 27.0 | OK |
 | H7 | (-51.0, 36.0) | J2 14.0 | OK |
 | H8 | (51.0, 36.0) | J1 29.0 | OK |
-| FID1 | (-52.0, 32.0) | J2 10.0 | OK |
-| FID2 | (52.0, 28.0) | J4 25.7 | OK |
+| FID1 | (-52.1, 31.4) | J2 9.5 | OK |
+| FID2 | (52.0, 28.0) | J4 29.0 | OK |
 | FID3 | (47.0, -24.0) | J9 25.5 | OK |
 
 ## 6. Airflow
@@ -208,17 +205,17 @@ The fan blows down into the pin fins; air leaves the fin field radially at board
 | D1 | PMEG4050EP | heat source | 1.10 | (22.0, 28.5) | bottom-right | 18.6 | no | far exhaust |
 | D2 | PMEG4050EP | heat source | 1.10 | (-42.0, 25.0) | bottom-left | 32.0 | no | outside |
 | D3 | PMEG4050EP | heat source | 1.10 | (-42.0, 11.0) | left | 29.5 | no | far exhaust |
-| J4 | RJ45 MagJack | tall | 13.30 | (46.0, 3.0) | right | 33.5 | no | OK |
-| J6 | 2x12 header | tall | 8.50 | (-50.5, -27.0) | top-left | 40.7 | no | OK |
+| J4 | RJ45 MagJack | tall | 13.30 | (37.2, 3.0) | right | 24.7 | no | OK |
+| J6 | 2x12 header | tall | 8.50 | (-50.5, -27.1) | top-left | 40.7 | no | OK |
 | J7 | Fan 4P | tall | 11.40 | (-30.0, -30.0) | top-left | 24.7 | no | OK |
 | J9 | 2x8 header | tall | 8.50 | (24.0, -35.0) | top-right | 25.3 | no | OK |
 | L1 | 2.2uH | heat source | 3.10 | (-27.0, 20.0) | bottom-left | 16.3 | no | far exhaust |
-| L2 | 2.2uH | heat source | 1.20 | (20.0, -8.5) | top-right | 7.5 | no | near exhaust |
+| L2 | 2.2uH | heat source | 1.20 | (20.6, -8.5) | right | 8.1 | no | near exhaust |
 | U2 | W25Q256JV 32MB | heat source | 0.80 | (-20.0, 5.0) | left | 7.5 | no | near exhaust |
 | U3 | TPS62130 | heat source | 1.00 | (-34.0, 18.0) | bottom-left | 22.2 | no | far exhaust |
 | U4 | TLV62569 | heat source | 1.45 | (16.5, -7.5) | top-right | 4.0 | no | near exhaust |
 | U5 | LAN8720A | heat source | 0.90 | (22.0, 3.0) | right | 9.5 | no | near exhaust |
-| U6 | CP2102N | heat source | 0.90 | (-42.0, 19.0) | bottom-left | 30.2 | no | outside |
+| U6 | CP2102N | heat source | 0.90 | (-39.5, 19.0) | bottom-left | 27.8 | no | far exhaust |
 
 ## 7. Fan control
 

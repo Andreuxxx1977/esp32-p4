@@ -57,7 +57,7 @@ ESP32-P4NRW32X (Dual-core RISC-V 400 MHz SoC, 32 MB in-package PSRAM, chip rev v
 | MIPI DSI (2-lane D-PHY) | 34-40 | DSI_CLK_N, DSI_CLK_P, DSI_D0_N, DSI_D0_P, DSI_D1_N, DSI_D1_P, DSI_REXT |
 | MIPI D-PHY supply | 41 | VDD_MIPI_PHY |
 | MIPI CSI (2-lane D-PHY) | 42-48 | CSI_CLK_N, CSI_CLK_P, CSI_D0_N, CSI_D0_P, CSI_D1_N, CSI_D1_P, CSI_REXT |
-| USB 2.0 HS OTG UTMI PHY | 49-51 | USBHS_DM, USBHS_DP, VDD_USBPHY |
+| USB 2.0 HS OTG UTMI PHY | 49-51 | USBHS_D_N, USBHS_D_P, VDD_USBPHY |
 | Quad-SPI flash MSPI | 27-33 | FLASH_CK, FLASH_CS, FLASH_D, FLASH_HOLD, FLASH_Q, FLASH_WP, VDDO_FLASH |
 | 40 MHz crystal | 99-100 | XTAL_N, XTAL_P |
 | External VDD_HP DCDC control | 78-79 | VDD_HP_EN, VDD_HP_FB |
@@ -127,8 +127,8 @@ RMII reference: GPIO50 `RMII_REF_CLK` -- EMAC RMII_CLK (50 MHz in from PHY). RMI
 | GPIO21 | 23 | VDD_IO_0 = `+3V3` | `SD_DET` | microSD card detect (low = card) | microSD | GPIO | Netlist: R71 10k to +3V3 |
 | GPIO22 | 24 | VDD_IO_0 = `+3V3` | `GPIO22` | Header J6 / SPI LCD MISO (J9) | Header | GPIO |  |
 | GPIO23 | 25 | VDD_IO_0 = `+3V3` | `GPIO23` | Header J6 / SPI LCD CS (J9) | Header | GPIO |  |
-| GPIO24 | 52 | VDD_IO_4 = `+3V3` | `USJ_DM` | USB Serial/JTAG D- | USB-JTAG | IO_MUX fixed | 22R series; IO_MUX USJ_DM legal on GPIO 24 |
-| GPIO25 | 53 | VDD_IO_4 = `+3V3` | `USJ_DP` | USB Serial/JTAG D+ | USB-JTAG | IO_MUX fixed | 22R series; Reset: IE, USB_PU (after reset); IO_MUX USJ_DP legal on GPIO 25 |
+| GPIO24 | 52 | VDD_IO_4 = `+3V3` | `USJ_D_N` | USB Serial/JTAG D- (USJ_DM) | USB-JTAG | IO_MUX fixed | 22R series; IO_MUX USJ_DM legal on GPIO 24 |
+| GPIO25 | 53 | VDD_IO_4 = `+3V3` | `USJ_D_P` | USB Serial/JTAG D+ (USJ_DP) | USB-JTAG | IO_MUX fixed | 22R series; Reset: IE, USB_PU (after reset); IO_MUX USJ_DP legal on GPIO 25 |
 | GPIO26 | 55 | VDD_IO_4 = `+3V3` | `LCD_BL_PWM` | Display backlight PWM (FPC IO1) | Display | GPIO matrix | LEDC PWM |
 | GPIO27 | 56 | VDD_IO_4 = `+3V3` | `LCD_RST` | Display reset (FPC IO0) | Display | GPIO |  |
 | GPIO28 | 57 | VDD_IO_4 = `+3V3` | `RMII_CRS_DV` | EMAC RMII_CRS_DV | Ethernet | IO_MUX fixed | IO_MUX RMII_CRS_DV legal on GPIO 28/45/51 |
@@ -183,8 +183,8 @@ RMII reference: GPIO50 `RMII_REF_CLK` -- EMAC RMII_CLK (50 MHz in from PHY). RMI
 | 46 | CSI_DATAN1 | MIPI CSI (2-lane D-PHY) | `CSI_D1_N` | R75 0R -> `CAM_D1_N` -> J_CAM.5 (D1_N) |
 | 47 | CSI_DATAP1 | MIPI CSI (2-lane D-PHY) | `CSI_D1_P` | R74 0R -> `CAM_D1_P` -> J_CAM.6 (D1_P) |
 | 48 | CSI_REXT | MIPI CSI (2-lane D-PHY) | `CSI_REXT` | R5 4.02k to `GND` |
-| 49 | USB-DM | USB 2.0 HS OTG UTMI PHY | `USBHS_DM` | R29 0R -> `USB1_DM` -> J1.A7 (D-), J1.B7 (D-), U7.2 (D-) |
-| 50 | USB-DP | USB 2.0 HS OTG UTMI PHY | `USBHS_DP` | R10 1M (DNP) to `GND`; R28 0R -> `USB1_DP` -> J1.A6 (D+), J1.B6 (D+), U7.1 (D+) |
+| 49 | USB-DM | USB 2.0 HS OTG UTMI PHY | `USBHS_D_N` | R29 0R -> `USB1_D_N` -> J1.A7 (D-), J1.B7 (D-), U7.2 (D-) |
+| 50 | USB-DP | USB 2.0 HS OTG UTMI PHY | `USBHS_D_P` | R10 1M (DNP) to `GND`; R28 0R -> `USB1_D_P` -> J1.A6 (D+), J1.B6 (D+), U7.1 (D+) |
 | 78 | FB_DCDC | External VDD_HP DCDC control | `VDD_HP_FB` | C48 22pF to `VDD_HP`; R20 499k to `VDD_HP`; R21 499k to `GND`; U4.5 (FB) |
 | 79 | EN_DCDC | External VDD_HP DCDC control | `VDD_HP_EN` | U4.1 (EN) |
 | 99 | XTAL_N | 40 MHz crystal | `XTAL_N` | R12 0R -> `XTAL_N_Y` -> C44 12pF to `GND`, Y1.3 (XOUT) |
@@ -273,8 +273,8 @@ Result: **0 overlapping pads** across 15 interface pairs. MIPI DSI/CSI and USB 2
 | --- | --- | --- | --- | --- |
 | LP_U0TXD | `LP_UART_TXD` | GPIO14 | 14 | OK |
 | LP_U0RXD | `LP_UART_RXD` | GPIO15 | 15 | OK |
-| USJ_DM | `USJ_DM` | GPIO24 | 24 | OK |
-| USJ_DP | `USJ_DP` | GPIO25 | 25 | OK |
+| USJ_DM | `USJ_D_N` | GPIO24 | 24 | OK |
+| USJ_DP | `USJ_D_P` | GPIO25 | 25 | OK |
 | RMII_CRS_DV | `RMII_CRS_DV` | GPIO28 | 28/45/51 | OK |
 | RMII_RXD0 | `RMII_RXD0` | GPIO29 | 29/46/52 | OK |
 | RMII_RXD1 | `RMII_RXD1` | GPIO30 | 30/47/53 | OK |
@@ -417,18 +417,18 @@ Closed-form Hammerstad-Jensen / IPC-2141A starting geometry; PCBWay confirms wit
 | `MIPI_100` | 24 | CAM_CLK_N, CAM_CLK_P, CAM_D0_N, CAM_D0_P, CAM_D1_N, CAM_D1_P, CSI_CLK_N, CSI_CLK_P, CSI_D0_N, CSI_D0_P, CSI_D1_N, CSI_D1_P, DISP_CLK_N, DISP_CLK_P, DISP_D0_N, DISP_D0_P, DISP_D1_N, DISP_D1_P, DSI_CLK_N, DSI_CLK_P, DSI_D0_N, DSI_D0_P, DSI_D1_N, DSI_D1_P |
 | `POWER` | 12 | +3V3, BUCK_SW, FAN_5V, HP_SW, SD_VDD, VBUS1, VBUS2, VBUS3, VDD_HP, VDD_HP1_PAD, VSYS_5V, VSYS_OR |
 | `SE_50` | 42 | FLASH_CK, FLASH_CK_M, FLASH_CS, FLASH_CS_M, FLASH_D, FLASH_D_M, FLASH_HOLD, FLASH_HOLD_M, FLASH_Q, FLASH_Q_M, FLASH_WP, FLASH_WP_M, RMII_CRS_DV, RMII_CRS_DV_PHY, RMII_REF_CLK, RMII_REF_CLK_PHY, RMII_RXD0, RMII_RXD0_PHY, RMII_RXD1, RMII_RXD1_PHY, RMII_TXD0, RMII_TXD0_PHY, RMII_TXD1, RMII_TXD1_PHY, RMII_TX_EN, RMII_TX_EN_PHY, SD_CLK, SD_CLK_C, SD_CMD, SD_CMD_C, SD_D0, SD_D0_C, SD_D1, SD_D1_C, SD_D2, SD_D2_C, SD_D3, SD_D3_C, XTAL_N, XTAL_N_Y, XTAL_P, XTAL_P_Y |
-| `USB_90` | 10 | USB1_DM, USB1_DP, USB2_DM, USB2_DP, USB3_DM, USB3_DP, USBHS_DM, USBHS_DP, USJ_DM, USJ_DP |
+| `USB_90` | 10 | USB1_D_N, USB1_D_P, USB2_D_N, USB2_D_P, USB3_D_N, USB3_D_P, USBHS_D_N, USBHS_D_P, USJ_D_N, USJ_D_P |
 | `Default` | 83 | all other nets |
 
 ### 6.5 Differential pairs (`DIFF_PAIRS`)
 
 | P | N | Class | P pins | N pins | Status |
 | --- | --- | --- | ---: | ---: | --- |
-| `USB1_DP` | `USB1_DM` | `USB_90` | 4 | 4 | OK |
-| `USBHS_DP` | `USBHS_DM` | `USB_90` | 3 | 2 | OK |
-| `USB2_DP` | `USB2_DM` | `USB_90` | 5 | 5 | OK |
-| `USB3_DP` | `USB3_DM` | `USB_90` | 5 | 5 | OK |
-| `USJ_DP` | `USJ_DM` | `USB_90` | 2 | 2 | OK |
+| `USB1_D_P` | `USB1_D_N` | `USB_90` | 4 | 4 | OK |
+| `USBHS_D_P` | `USBHS_D_N` | `USB_90` | 3 | 2 | OK |
+| `USB2_D_P` | `USB2_D_N` | `USB_90` | 5 | 5 | OK |
+| `USB3_D_P` | `USB3_D_N` | `USB_90` | 5 | 5 | OK |
+| `USJ_D_P` | `USJ_D_N` | `USB_90` | 2 | 2 | OK |
 | `CSI_D0_P` | `CSI_D0_N` | `MIPI_100` | 2 | 2 | OK |
 | `CSI_D1_P` | `CSI_D1_N` | `MIPI_100` | 2 | 2 | OK |
 | `CSI_CLK_P` | `CSI_CLK_N` | `MIPI_100` | 2 | 2 | OK |
