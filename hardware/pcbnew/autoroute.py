@@ -151,6 +151,17 @@ def u1_stubs(board) -> list[PreTrack]:
     return stubs
 
 
+def escape_tracks(board, path: Path | None = None) -> list[PreTrack]:
+    """The planner's deterministic SoC escape tracks (layout_plan escape_tracks.json),
+    from each U1 stub end through the 0402 ring, as fixed copper for the router."""
+    ox, oy = origin_of(board)
+    out = []
+    for tr in lp.load_escape_tracks(path or lp.ESCAPE_FILE):
+        pts = [(ox + nm(x), oy + nm(y)) for x, y in tr.points]
+        out += [PreTrack(a, b, nm(tr.width), pcbnew.F_Cu, tr.net) for a, b in zip(pts, pts[1:]) if a != b]
+    return out
+
+
 def board_vias(board) -> list[PreVia]:
     """The vias the placed board carries: the EPAD thermal-via array of the layout plan
     (from the spec, so this also works on an already routed board)."""
@@ -575,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--threads", type=int)
     ap.add_argument("--timeout", type=int, default=3600, help="seconds for FreeRouting")
     ap.add_argument("--no-u1-stubs", dest="u1_stubs", action="store_false")
+    ap.add_argument("--no-escape-tracks", dest="escape_tracks", action="store_false",
+                    help="do not pre-route the planner's SoC escape tracks")
     ap.add_argument("--microvias", action="store_true",
                     help="let the router use the HDI laser microvias (L1-L2, L3-L4)")
     ap.add_argument("--no-inner-vias", dest="inner_vias", action="store_false",
@@ -610,6 +623,10 @@ def main(argv: list[str] | None = None) -> int:
     tracks = u1_stubs(view) if args.u1_stubs else []
     vias = board_vias(view)
     log = [f"pre-routing: {len(tracks)} U1 fan-out stubs, {len(vias)} planned vias kept"]
+    if args.escape_tracks and args.u1_stubs:
+        esc = escape_tracks(view)
+        tracks += esc
+        log.append(f"SoC escape tracks: {len(esc)} segments ({lp.ESCAPE_FILE.name})")
     if args.inner_vias:
         more_tracks, more_vias, note = inner_vias(view, vias)
         tracks += more_tracks

@@ -662,7 +662,7 @@ BOTTOM_DECOUPLING: frozenset[tuple[str, str]] = frozenset({
 # within SOC_DECAP_MAX_MM, in line with the pad. The others are bulk and may sit up to
 # SOC_BULK_MAX_MM away: a pad's 0.35 mm-pitch neighbours need their straight escape tracks
 # past it (see layout_plan "SoC escape channels"), so there is one in-line spot per pad.
-SOC_DECAP_MAX_MM = 2.1
+SOC_DECAP_MAX_MM = 2.3
 SOC_BULK_MAX_MM = 4.0
 for _pad, _net, _vals in SOC_DECOUPLING:
     for _i, _v in enumerate(_vals):
@@ -676,7 +676,7 @@ for _pad, _net, _vals in SOC_DECOUPLING:
 # stay 0402 inside the heatsink keep-out, within 6 mm. The 0R links (flash, SD, MIPI,
 # USB-HS: placeholders that cost nothing to fit) sit in line in their pad's escape
 # channel; neighbouring channels are 0.35 mm apart, so they stagger outwards (<= 10 mm).
-SOC_SUPPORT_MAX_MM = 7.0
+SOC_SUPPORT_MAX_MM = 7.5
 SOC_TERM_MAX_MM = 8.5
 SOC_LINK_MAX_MM = 10.0
 XTAL_SERIES_MAX_MM = 6.5

@@ -970,6 +970,38 @@ def escape_channels() -> dict[str, list[Channel]]:
     return out
 
 
+CLEARANCE_MAX_MM = max(c for _, c in ESCAPE_TRACKS.values())
+
+
+def net_clearance(net: str) -> float:
+    return ESCAPE_TRACKS.get(bs.netclass_of(net), ESCAPE_TRACKS["Default"])[1] if net else 0.0
+
+
+def channel_keep(ch: "Channel", o: "Obstacle") -> float:
+    """Track centre to pad edge: half width + the larger of the two nets' clearances."""
+    return ch.width / 2 + max(ch.clearance, net_clearance(o.net))
+
+
+def channel_pitch(a: "Channel", b: "Channel") -> float:
+    return (a.width + b.width) / 2 + max(a.clearance, b.clearance)
+
+
+def channel_forbidden(ch: "Channel", obs: list["Obstacle"], r: float) -> list[tuple[float, float]]:
+    """Tangential intervals a channel's track centre must avoid at radius r (exact
+    point-to-rectangle distance: rounded ends in front of / behind a pad)."""
+    out = []
+    for o in obs:
+        if o.net in ch.owners:
+            continue
+        k = channel_keep(ch, o)
+        dr = o.r0 - r if r < o.r0 else (r - o.r1 if r > o.r1 else 0.0)
+        if dr >= k:
+            continue
+        ext = math.sqrt(k * k - dr * dr)
+        out.append((o.t0 - ext, o.t1 + ext))
+    return out
+
+
 class EscapeModel:
     """Placed top-side pads near U1 versus the U1 escape channels (see above)."""
 
@@ -1006,24 +1038,33 @@ class EscapeModel:
         return min(ends, default=ESCAPE_REACH_MM)
 
     @staticmethod
-    def _jog(r0: float) -> float:
-        return max(0.0, min(ESCAPE_JOG_MAX_MM, r0 - U1_STUB_END_MM - 0.05))
+    def _jog(r: float) -> float:
+        """How far a 45-degree track can be off its pad line at radius r."""
+        return max(0.0, min(ESCAPE_JOG_MAX_MM, r - U1_STUB_END_MM))
 
     def _band(self, o: Obstacle, obs: list[Obstacle]) -> str | None:
-        """Do the channels passing the radial band of ``o`` pack between ``obs``?"""
-        lo, hi = o.r0 - 0.05, o.r1 + 0.05
-        band = [q for q in obs if q.r1 > lo and q.r0 < hi]
-        chans = [ch for ch in self.channels[o.side] if self._end(ch, obs) > lo]
-        jog = self._jog(o.r0)
+        """Do the channels passing ``o`` still pack between ``obs``? Checked at a few radii
+        from where ``o``'s clearance zone starts to its inner edge, with the exact
+        point-to-rectangle clearance and the jog a 45-degree track can have made by then
+        (the same model :func:`escape_tracks` routes with)."""
+        kmax = max(ch.width / 2 + CLEARANCE_MAX_MM for ch in self.channels[o.side]) \
+            if self.channels[o.side] else 0.0
+        for f in (1.0, 0.75, 0.5, 0.25, 0.0):
+            r = max(o.r0 - f * kmax, U1_STUB_END_MM)
+            why = self._pack(o.side, obs, r)
+            if why:
+                return why
+        return None
+
+    def _pack(self, side: str, obs: list[Obstacle], r: float) -> str | None:
+        chans = [ch for ch in self.channels[side] if self._end(ch, obs) > r]
+        jog = self._jog(r)
         x_prev, ch_prev = None, None
         for ch in chans:
             x = ch.t - jog
             if ch_prev is not None:
-                x = max(x, x_prev + (ch_prev.width + ch.width) / 2
-                        + max(ch_prev.clearance, ch.clearance))
-            keep = ch.width / 2 + ch.clearance
-            forbid = sorted((q.t0 - keep, q.t1 + keep) for q in band if q.net not in ch.owners)
-            for a, b in forbid:
+                x = max(x, x_prev + channel_pitch(ch_prev, ch))
+            for a, b in sorted(channel_forbidden(ch, obs, r)):
                 if a < x < b - EPS:
                     x = b
             if x > ch.t + jog + EPS:
@@ -1049,6 +1090,308 @@ class EscapeModel:
         """Re-check every placed obstacle (for tests and the report)."""
         return [f"{o.ref}: {why}" for obs in self.placed.values() for o in obs
                 if (why := self._band(o, obs))]
+
+
+# --------------------------------------------------------------------------
+# Escape tracks: the channels drawn out as real copper
+# --------------------------------------------------------------------------
+# The router is not told about the channel model, so it happily lays a neighbour straight
+# through the room a channel needed for its jog. The escape tracks are therefore routed
+# here, deterministically, and handed to the router as fixed copper: per side, channels in
+# side: one linear program over all its channels (scipy / HiGHS). Variables are each
+# channel's tangential position every ESCAPE_STEP_MM of radius; constraints: start on the
+# pad line at the stub end, move at most 45 degrees, keep netclass pitch to the neighbour,
+# keep netclass clearance to every other-net pad (the side of each pad a channel passes is
+# taken from the leftmost packing where that pad is widest), and land in its first own-net
+# pad in line (cap, series resistor) or run out to ESCAPE_REACH_MM. Objective: stay as close
+# to the pad line as possible. The result is written to escape_tracks.json (the router's
+# Python has no scipy) and re-checked geometrically by the tests.
+
+ESCAPE_STEP_MM = 0.025
+ESCAPE_DROP_COST = 1000.0        # a channel without escape track costs this much deviation
+ESCAPE_MARGIN_MM = 0.005          # on top of the netclass rules (grid / linearisation slack)
+ESCAPE_MILP_SECONDS = 300
+
+
+@dataclass
+class EscapeTrack:
+    pad: str
+    net: str
+    width: float
+    points: list          # design mm, from the U1 stub end outwards
+    end: str              # "pad <ref>" | "reach"
+
+
+def _to_xy(side: str, t: float, r: float) -> tuple[float, float]:
+    return {"left": (-r, t), "right": (r, t), "top": (t, -r), "bottom": (t, r)}[side]
+
+
+def _leftmost(chans, obs, r, active) -> dict[str, float]:
+    """Leftmost packing of the active channels at radius r (the planner's own check)."""
+    jog = EscapeModel._jog(r)
+    pos, x_prev, ch_prev = {}, None, None
+    for ch in chans:
+        if not active(ch, r):
+            continue
+        x = ch.t - jog
+        if ch_prev is not None:
+            x = max(x, x_prev + channel_pitch(ch_prev, ch))
+        for a, b in sorted(channel_forbidden(ch, obs, r)):
+            if a < x < b - EPS:
+                x = b
+        pos[ch.pad] = x
+        x_prev, ch_prev = x, ch
+    return pos
+
+
+def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
+    """Escape tracks for every U1 channel (see above). Returns (tracks, problems)."""
+    import numpy as np                                   # only needed here
+    from scipy.optimize import Bounds, LinearConstraint, milp
+    from scipy.sparse import coo_matrix
+
+    planner = Planner()
+    planner.plan = plan
+    model = EscapeModel()
+    for ref, p in plan.placements.items():
+        if ref != "U1" and (p.side == "F" or p.tht) and model.in_zone(p.shape().rect):
+            model.add(planner._escape_obstacles(p))
+    d = ESCAPE_STEP_MM
+    radii = [U1_STUB_END_MM + k * d for k in range(int(round((ESCAPE_REACH_MM - U1_STUB_END_MM) / d)) + 1)]
+    out: list[EscapeTrack] = []
+    problems: list[str] = []
+    def solve(side, chans, r_limit):
+        obs = model.placed[side]
+        ends = {}
+        for ch in chans:                     # first own pad in line with the channel
+            own = sorted((o for o in obs if o.net in ch.owners and o.t0 - ESCAPE_JOG_MAX_MM <= ch.t
+                          <= o.t1 + ESCAPE_JOG_MAX_MM), key=lambda o: o.r0)
+            ends[ch.pad] = own[0] if own else None
+        k_limit = int(round((r_limit - radii[0]) / d))
+        for ch in chans:                     # an own pad beyond the limit is not reached
+            if ends[ch.pad] is not None and ends[ch.pad].r0 + 0.1 > r_limit:
+                ends[ch.pad] = None
+        last = {ch.pad: (min(k_limit, int((ends[ch.pad].r0 + 0.1 - radii[0]) / d))
+                         if ends[ch.pad] else k_limit) for ch in chans}
+
+        def active(ch, r):
+            return r <= radii[last[ch.pad]] + EPS
+
+        # variables: x[i,k] (position), u[i,k] (|x - t|), one binary per interacting
+        # (channel, pad) -- 1 = the channel passes that pad on its right (higher t) side --
+        # and one binary per channel: 1 = dropped (no escape track; left to the router).
+        index = {}
+        for ch in chans:
+            for k in range(last[ch.pad] + 1):
+                index[(ch.pad, k)] = len(index)
+        n = len(index)
+        pairs = {}
+        for ch in chans:
+            for o in obs:
+                if o.net in ch.owners:
+                    continue
+                kk = channel_keep(ch, o)
+                if o.t0 - kk - ESCAPE_JOG_MAX_MM < ch.t < o.t1 + kk + ESCAPE_JOG_MAX_MM \
+                        and o.r0 - kk < radii[last[ch.pad]]:
+                    pairs[(ch.pad, id(o))] = 2 * n + len(pairs)
+        drop = {ch.pad: 2 * n + len(pairs) + i for i, ch in enumerate(chans)}
+        # sigma[i,k] = |slope| of the segment arriving at sample k (0 straight .. 1 = 45 deg)
+        base = 2 * n + len(pairs) + len(chans)
+        sigma = {key: base + v for key, v in index.items()}
+        nv = base + n
+        rows, cols, vals, rhs = [], [], [], []
+
+        def le(terms, b):                    # sum(c * var) <= b
+            r = len(rhs)
+            for var, c in terms:
+                rows.append(r)
+                cols.append(var)
+                vals.append(c)
+            rhs.append(b)
+        big = 2 * ESCAPE_JOG_MAX_MM + 4.0
+        lower = [-np.inf] * nv
+        upper = [np.inf] * nv
+        for ch in chans:
+            z = drop[ch.pad]
+            for k in range(last[ch.pad] + 1):
+                v, u = index[(ch.pad, k)], n + index[(ch.pad, k)]
+                lower[u] = 0.0
+                le([(v, 1), (u, -1)], ch.t)          # u >= x - t
+                le([(v, -1), (u, -1)], -ch.t)        # u >= t - x
+                lower[v], upper[v] = ch.t - ESCAPE_JOG_MAX_MM, ch.t + ESCAPE_JOG_MAX_MM
+                if k == 0:
+                    lower[v] = upper[v] = ch.t
+                    continue
+                w = index[(ch.pad, k - 1)]
+                sg = sigma[(ch.pad, k)]
+                lower[sg], upper[sg] = 0.0, 1.0      # 45 degrees at most (unless dropped)
+                le([(v, 1), (w, -1), (sg, -d), (z, -big)], 0.0)
+                le([(v, -1), (w, 1), (sg, -d), (z, -big)], 0.0)
+                r = radii[k]
+                for o in obs:
+                    s = pairs.get((ch.pad, id(o)))
+                    if s is None:
+                        continue
+                    kk = channel_keep(ch, o) + ESCAPE_MARGIN_MM
+                    dr = o.r0 - r if r < o.r0 else (r - o.r1 if r > o.r1 else 0.0)
+                    if dr >= kk:
+                        continue
+                    ext = math.sqrt(kk * kk - dr * dr)
+                    le([(v, -1), (s, big), (z, -big)], big - (o.t1 + ext))   # s=1 -> x >= t1 + ext
+                    le([(v, 1), (s, -big), (z, -big)], o.t0 - ext)           # s=0 -> x <= t0 - ext
+                e = ends[ch.pad]
+                if e is not None and k == last[ch.pad]:
+                    le([(v, -1), (z, -big)], -(e.t0 + ch.width / 2))        # land in the own pad
+                    le([(v, 1), (z, -big)], e.t1 - ch.width / 2)
+        for s in pairs.values():
+            lower[s], upper[s] = 0.0, 1.0
+        for z in drop.values():
+            lower[z], upper[z] = 0.0, 1.0
+        for sg in sigma.values():
+            lower[sg], upper[sg] = 0.0, 1.0
+        # pitch to the next few channels; slanted neighbours need more tangential room
+        # (perpendicular = tangential / sqrt(1 + s^2) <= ... ; sqrt(1 + s^2) <= 1 + 0.414 s)
+        slant = (math.sqrt(2) - 1) / 2
+        for k in range(1, len(radii)):
+            act = [ch for ch in chans if last[ch.pad] >= k]
+            for ia, a in enumerate(act):
+                for b in act[ia + 1:ia + 5]:
+                    pab = channel_pitch(a, b) + ESCAPE_MARGIN_MM
+                    le([(index[(a.pad, k)], 1), (index[(b.pad, k)], -1),
+                        (sigma[(a.pad, k)], pab * slant), (sigma[(b.pad, k)], pab * slant),
+                        (drop[a.pad], -big), (drop[b.pad], -big)], -pab)
+        A = coo_matrix((vals, (rows, cols)), shape=(len(rhs), nv)).tocsr()
+        cost = np.concatenate([np.zeros(n), np.ones(n), np.zeros(len(pairs)),
+                               np.full(len(chans), ESCAPE_DROP_COST), np.full(n, 0.002)])
+        integrality = np.concatenate([np.zeros(2 * n), np.ones(len(pairs) + len(chans)), np.zeros(n)])
+        res = milp(cost, constraints=LinearConstraint(A, -np.inf, np.array(rhs)),
+                   integrality=integrality, bounds=Bounds(lower, upper),
+                   options={"time_limit": ESCAPE_MILP_SECONDS, "mip_rel_gap": 0.02})
+        if res.x is None:
+            return None, res.message
+        dropped = {pad for pad, z in drop.items() if res.x[z] > 0.5}
+        x = res.x
+        tracks = []
+        for ch in chans:
+            if ch.pad in dropped:
+                continue
+            e = ends[ch.pad]
+            pts = []
+            prev_slope = None
+            for k in range(last[ch.pad] + 1):
+                xv = x[index[(ch.pad, k)]]
+                if k == 0 or k == last[ch.pad]:
+                    pts.append((radii[k], xv))
+                    continue
+                slope = round(x[index[(ch.pad, k + 1)]] - xv, 6)
+                if prev_slope is None or abs(slope - prev_slope) > 1e-6:
+                    pts.append((radii[k], xv))
+                prev_slope = slope
+            tracks.append(EscapeTrack(ch.pad, ch.net, ch.width,
+                                      [tuple(round(v, 4) for v in _to_xy(side, xv, r)) for r, xv in pts],
+                                      f"pad {e.ref}" if e is not None else "reach"))
+        return tracks, sorted(dropped, key=int)
+
+    for side, chans in model.channels.items():
+        tracks, dropped = solve(side, chans, ESCAPE_REACH_MM)
+        if tracks is None:
+            problems.append(f"{side}: no escape tracks ({dropped})")
+            continue
+        out += tracks
+        if dropped:
+            problems.append(f"{side}: no escape track for U1 pads {', '.join(dropped)} (left to the router)")
+    return out, problems
+
+
+ESCAPE_FILE = Path(__file__).with_name("escape_tracks.json")
+
+
+def _seg_rect(p, q, r) -> float:
+    """Distance between segment pq and axis-aligned rectangle r (0 if they touch)."""
+    x0, y0, x1, y1 = r
+    if (x0 <= p[0] <= x1 and y0 <= p[1] <= y1) or (x0 <= q[0] <= x1 and y0 <= q[1] <= y1):
+        return 0.0
+    corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    edges = list(zip(corners, corners[1:] + corners[:1]))
+    return min([_seg_seg(p, q, a, b) for a, b in edges])
+
+
+def _seg_seg(p, q, a, b) -> float:
+    def pt(s0, s1, c):
+        vx, vy = s1[0] - s0[0], s1[1] - s0[1]
+        L = vx * vx + vy * vy
+        u = 0.0 if L == 0 else max(0.0, min(1.0, ((c[0] - s0[0]) * vx + (c[1] - s0[1]) * vy) / L))
+        return math.hypot(s0[0] + u * vx - c[0], s0[1] + u * vy - c[1])
+
+    def cross(o, a1, b1):
+        return (a1[0] - o[0]) * (b1[1] - o[1]) - (a1[1] - o[1]) * (b1[0] - o[0])
+    if (cross(p, q, a) * cross(p, q, b) < 0) and (cross(a, b, p) * cross(a, b, q) < 0):
+        return 0.0
+    return min(pt(p, q, a), pt(p, q, b), pt(a, b, p), pt(a, b, q))
+
+
+def check_escape_tracks(plan: "Plan", tracks: list[EscapeTrack]) -> list[str]:
+    """Exact geometry: every escape track keeps netclass clearance to other-net top pads
+    and to the other escape tracks (inside U1's courtyard the 0.09 mm fan-out rule)."""
+    planner = Planner()
+    planner.plan = plan
+    pads = []
+    for ref, p in plan.placements.items():
+        if ref == "U1" or not (p.side == "F" or p.tht):
+            continue
+        comp = planner.comps.get(ref)
+        mapping = plan.pad_maps.get(ref, {})
+        nets = {fp: net for spec, net in (comp.conns.items() if comp else ()) for fp in mapping.get(spec, (spec,))}
+        for pg, sh in zip(p.geom.copper_pads(), p.pad_shapes()):
+            if EscapeModel.in_zone(sh.rect):
+                pads.append((sh.rect, nets.get(pg.number, ""), ref))
+    owners = {ch.pad: ch.owners for chans in escape_channels().values() for ch in chans}
+    rules = {ch.pad: (ch.width, ch.clearance) for chans in escape_channels().values() for ch in chans}
+    problems = []
+    segs = []
+    for tr in tracks:
+        w, c = rules[tr.pad]
+        for a, b in zip(tr.points, tr.points[1:]):
+            segs.append((a, b, tr, w, c))
+            for rect, net, ref in pads:
+                if net in owners[tr.pad]:
+                    continue
+                need = w / 2 + max(c, net_clearance(net))
+                gap = _seg_rect(a, b, rect)
+                if gap < need - 1e-3:
+                    problems.append(f"U1.{tr.pad} ({tr.net}) {gap:.3f} mm from {ref} [{net}] (needs {need:.3f})")
+    for i, (a, b, t1, w1, c1) in enumerate(segs):
+        for a2, b2, t2, w2, c2 in segs[i + 1:]:
+            if t2.net == t1.net:
+                continue
+            if max(abs(v) for v in (*a, *b, *a2, *b2)) > ESCAPE_REACH_MM + 1:
+                continue
+            gap = _seg_seg(a, b, a2, b2) - (w1 + w2) / 2
+            inside = all(max(abs(v[0]), abs(v[1])) <= U1_COURTYARD_HALF_MM for v in (a, a2)) or \
+                all(max(abs(v[0]), abs(v[1])) <= U1_COURTYARD_HALF_MM for v in (b, b2))
+            need = DESIGN_RULES["min_clearance"] if inside else max(c1, c2)
+            if gap < need - 1e-3:
+                problems.append(f"U1.{t1.pad} / U1.{t2.pad}: {gap:.3f} mm (needs {need:.3f})")
+    return sorted(set(problems))
+
+
+def escape_json(plan: "Plan") -> dict:
+    tracks, problems = escape_tracks(plan)
+    return {"comment": "GENERATED by `python3 -m hardware.pcbnew.layout_plan escapes` from "
+                       "board_spec + the layout plan; routed as fixed copper by autoroute.py",
+            "problems": problems,
+            "tracks": [{"pad": t.pad, "net": t.net, "width": t.width, "end": t.end,
+                        "points": [[round(x, 4), round(y, 4)] for x, y in t.points]}
+                       for t in sorted(tracks, key=lambda t: int(t.pad))]}
+
+
+def load_escape_tracks(path: Path = ESCAPE_FILE) -> list[EscapeTrack]:
+    return load_escape_tracks_from(json.loads(Path(path).read_text()))
+
+
+def load_escape_tracks_from(data: dict) -> list[EscapeTrack]:
+    return [EscapeTrack(t["pad"], t["net"], t["width"], [tuple(p) for p in t["points"]], t["end"])
+            for t in data["tracks"]]
 
 
 # ==========================================================================
@@ -2137,6 +2480,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--top-only", action="store_true", help="never use B.Cu for the SoC ring")
     d = sub.add_parser("dru", help="write the custom DRC rules")
     d.add_argument("-o", "--output", type=Path, default=DRU_FILE)
+    e = sub.add_parser("escapes", help="solve and write the U1 escape tracks (needs scipy)")
+    e.add_argument("-o", "--output", type=Path, default=ESCAPE_FILE)
     c = sub.add_parser("courtyards", help="(re)generate footprint_courtyards.json")
     c.add_argument("--cache", type=Path, default=DEFAULT_CACHE,
                    help="footprint cache ($KICAD_FP_CACHE, default ~/.cache/esp32p4-footprints)")
@@ -2147,6 +2492,16 @@ def main(argv: list[str] | None = None) -> int:
         res = refresh_courtyards(args.cache, args.tag, fetch=not args.offline)
         print(f"wrote {COURTYARD_JSON} ({len(res['footprints'])} footprints)")
         return 0
+    if args.cmd == "escapes":
+        plan = build_plan()
+        data = escape_json(plan)
+        bad = check_escape_tracks(plan, load_escape_tracks_from(data))
+        args.output.write_text(json.dumps(data, indent=1) + "\n")
+        print(f"wrote {args.output}: {len(data['tracks'])} escape tracks; "
+              f"{len(data['problems'])} notes, {len(bad)} clearance problems")
+        for x in data["problems"] + bad:
+            print("  " + x)
+        return 1 if bad else 0
     if args.cmd == "dru":
         args.output.write_text(dru_text(build_plan()))
         print(f"wrote {args.output}")

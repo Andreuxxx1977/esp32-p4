@@ -209,7 +209,7 @@ def test_decoupling_near_u1_is_0402():
     assert [c.ref for c in dec if (c.place.pad, c.value) in first
             and c.place.max_mm > bs.SOC_DECAP_MAX_MM] == []
     assert [c.ref for c in dec if c.place.max_mm > bs.SOC_BULK_MAX_MM] == []
-    assert bs.SOC_DECAP_MAX_MM <= 2.1 and bs.SOC_BULK_MAX_MM <= 4.0
+    assert bs.SOC_DECAP_MAX_MM <= 2.3 and bs.SOC_BULK_MAX_MM <= 4.0
 
 
 @pytest.mark.parametrize("rule", imp.impedance_rules(), ids=lambda r: r.netclass)

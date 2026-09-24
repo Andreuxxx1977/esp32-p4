@@ -563,3 +563,29 @@ def test_board_file_is_up_to_date(tmp_path, plan):
     out = tmp_path / BOARD.name
     w.write(out, lp.DEFAULT_CACHE, offline=True)
     assert out.read_text() == BOARD.read_text(), "run `python3 -m hardware.pcbnew.write_kicad_pcb`"
+
+
+# ==========================================================================
+# SoC escape tracks (hardware/pcbnew/escape_tracks.json)
+# ==========================================================================
+
+def test_escape_tracks_are_clear_of_every_other_net(plan):
+    """The committed escape tracks keep netclass clearance to other-net pads and to each
+    other on the *current* plan (re-solve with `layout_plan escapes` after moving parts)."""
+    tracks = lp.load_escape_tracks()
+    assert len(tracks) >= 60
+    assert lp.check_escape_tracks(plan, tracks) == []
+
+
+def test_escape_tracks_start_at_their_stub_and_move_at_most_45_degrees(plan):
+    chans = {ch.pad: ch for side in lp.escape_channels().values() for ch in side}
+    for tr in lp.load_escape_tracks():
+        ch = chans[tr.pad]
+        assert tr.net == ch.net and tr.width == ch.width
+        x, y = tr.points[0]
+        side, t, r = lp.polar(x, y)
+        assert side == ch.side and abs(t - ch.t) < 1e-3 and abs(r - lp.U1_STUB_END_MM) < 1e-3
+        for (x0, y0), (x1, y1) in zip(tr.points, tr.points[1:]):
+            _, t0, r0 = lp.polar(x0, y0)
+            _, t1, r1 = lp.polar(x1, y1)
+            assert r1 > r0 and abs(t1 - t0) <= (r1 - r0) + 1e-3, tr.pad      # outwards, <= 45 deg

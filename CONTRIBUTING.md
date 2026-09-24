@@ -42,7 +42,7 @@ python -m pytest -q                                # 8. all tests green
   side `F` (top) or `B` (bottom)". Near the SoC every connected pad keeps a straight *escape
   channel* for its track (see "SoC escape channels" in `hardware/pcbnew/layout_plan.py`), so a
   part may only sit in line with its own pad. The first decoupling cap of a pad is within
-  `SOC_DECAP_MAX_MM` (2.1 mm), bulk caps within `SOC_BULK_MAX_MM` (4 mm), bias/strap parts within
+  `SOC_DECAP_MAX_MM` (2.3 mm), bulk caps within `SOC_BULK_MAX_MM` (4 mm), bias/strap parts within
   `SOC_SUPPORT_MAX_MM`, 0R links within `SOC_LINK_MAX_MM`. The caps in `BOTTOM_DECOUPLING` sit on
   the bottom under the SoC's pad ring, which makes assembly double-sided.
 - **Heatsink keep-out:** inside the 25 x 25 mm square around the SoC only **U1 and 0402 passives** are
