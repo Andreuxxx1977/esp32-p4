@@ -64,9 +64,11 @@ LAYER_NAMES = ("F.Cu", "B.Cu")
 TOP, BOT = 1, 2                     # layer bits
 GRID_MM = 0.05
 MARGIN_MM = 0.01                    # on top of every clearance (grid slack)
-CLASSES = (0.10, 0.15, 0.20)        # clearance classes of obstacles; slot 3 = the pair partner
-PARTNER = 3
-NCLS = 4
+CLASSES = (0.10, 0.15, 0.20)        # clearance classes of obstacles; slot 3 = the pair partner,
+PARTNER = 3                         # slot 4 = unplated holes (hole clearance, never necked down)
+HOLE = 4
+NCLS = 5
+HOLE_CLEARANCE = lp.DESIGN_RULES["hole_clearance"]
 EDGE_MM = lp.DESIGN_RULES["copper_edge"]
 HOLE_TO_HOLE = lp.DESIGN_RULES["hole_to_hole"]
 VIA = (lp.DESIGN_RULES["via_diameter"], lp.DESIGN_RULES["via_drill"])      # 0.45 / 0.20
@@ -532,7 +534,7 @@ class Copper:
         self.kind[k] = it.kind
         self.lay[k] = it.layers if it.what != "npth" or True else 0
         if it.what == "npth":
-            self.net[k], self.cls[k] = NPTH, 2
+            self.net[k], self.cls[k] = NPTH, HOLE
         elif it.what == "keepout":
             self.net[k], self.cls[k] = KEEPOUT, 0
         else:
@@ -674,6 +676,7 @@ def closest(cu: Copper, ga: list[int], gb: list[int]) -> tuple[float, tuple, tup
 
 
 PAIR_RANK = {"MIPI_100": 0, "USB_90": 1, "ETH_100": 2}    # fastest first (1.5 Gb/s, 480 Mb/s, 100 Mb/s)
+SOC_RANK = 2.5                     # any other connection that starts at a U1 pad
 
 
 def priority(net: str) -> int:
@@ -892,11 +895,14 @@ class Router:
         """Centre distance a shape of half-size ``half`` of ``net`` keeps per obstacle class
         (inside the SoC breakout area every clearance is the DRU's breakout clearance)."""
         c = clearance(net)
+        hole = half + max(HOLE_CLEARANCE, c) + margin
         if breakout:
             return [half + BREAKOUT_CLEARANCE + margin] * len(CLASSES) + \
-                [half + min(BREAKOUT_CLEARANCE, partner_clearance(net) if partner(net) else c) + min(margin, 0.002)]
+                [half + min(BREAKOUT_CLEARANCE, partner_clearance(net) if partner(net) else c) + min(margin, 0.002),
+                 hole]
         out = [half + max(c, k) + margin for k in CLASSES]
         out.append(half + (partner_clearance(net) if partner(net) else c) + min(margin, 0.002))
+        out.append(hole)
         return out
 
     def breakout(self, w: Window) -> np.ndarray:
@@ -969,9 +975,48 @@ class Router:
         return vf, vr
 
     # ------------------------------------------------------------------ search
+    @staticmethod
+    def reachable(free: np.ndarray, via: np.ndarray, src: np.ndarray, dst: np.ndarray) -> tuple[bool, bool]:
+        """Cheap necessary condition for a path: src and dst in one 8-connected region of
+        free cells (layers joined where a via may stand). Saves the full A* on hopeless
+        connections, which would explore the whole window. Returns (connected, the source
+        region reaches the window border)."""
+        from scipy import ndimage
+        st = np.ones((3, 3), bool)
+        lab0, n0 = ndimage.label(free[0], structure=st)
+        lab1, n1 = ndimage.label(free[1], structure=st)
+        lab1 = np.where(lab1 > 0, lab1 + n0, 0)
+        parent = np.arange(n0 + n1 + 1)
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        both = via & (lab0 > 0) & (lab1 > 0)
+        for a, b in set(zip(lab0[both].tolist(), lab1[both].tolist())):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[rb] = ra
+        roots = np.array([find(x) for x in range(len(parent))])
+        roots[0] = -1
+        s_roots = set(roots[lab0[src[0]]].tolist()) | set(roots[lab1[src[1]]].tolist())
+        d_roots = set(roots[lab0[dst[0]]].tolist()) | set(roots[lab1[dst[1]]].tolist())
+        s_roots.discard(-1)
+        if s_roots & d_roots:
+            return True, True
+        edge = np.zeros(free.shape[1:], bool)
+        edge[0, :] = edge[-1, :] = edge[:, 0] = edge[:, -1] = True
+        b_roots = set(roots[lab0[edge]].tolist()) | set(roots[lab1[edge]].tolist())
+        return False, bool(s_roots & b_roots)
+
     def search(self, w: Window, cost: np.ndarray, via: np.ndarray, src: np.ndarray, dst: np.ndarray,
                turn90: float = TURN90, via_cost: float = VIA_COST, turn45: float = TURN45):
         if not src.any() or not dst.any():
+            return None
+        ok, border = self.reachable(cost >= 0, via, src, dst)
+        if not ok:
+            self.enclosed = not border
             return None
         ii, jj = np.nonzero(dst[0] | dst[1])
         tbox = np.array([ii.min(), jj.min(), ii.max(), jj.max()], np.int32)
@@ -1227,15 +1272,30 @@ class Router:
         return True
 
     def _bump_history(self, it: Item) -> None:
+        """Raise the history cost on the cells a ripped-up item covered (plus its clearance)."""
         x0, y0, x1, y1 = it.bbox()
-        g = self.g
-        i0 = max(0, int((x0 - self.bx0) / g))
-        i1 = min(self.NX - 1, int((x1 - self.bx0) / g) + 1)
-        j0 = max(0, int((y0 - self.by0) / g))
-        j1 = min(self.NY - 1, int((y1 - self.by0) / g) + 1)
+        g, pad = self.g, max(CLASSES)
+        i0 = max(0, int((x0 - pad - self.bx0) / g))
+        i1 = min(self.NX - 1, int((x1 + pad - self.bx0) / g) + 1)
+        j0 = max(0, int((y0 - pad - self.by0) / g))
+        j1 = min(self.NY - 1, int((y1 + pad - self.by0) / g) + 1)
+        if i0 > i1 or j0 > j1:
+            return
+        xs = self.bx0 + np.arange(i0, i1 + 1) * g
+        ys = self.by0 + np.arange(j0, j1 + 1) * g
+        X, Y = np.meshgrid(xs, ys, indexing="ij")
+        p = it.par
+        if it.kind == 2:
+            vx, vy = p[2] - p[0], p[3] - p[1]
+            L = vx * vx + vy * vy
+            u = np.zeros_like(X) if L == 0 else np.clip(((X - p[0]) * vx + (Y - p[1]) * vy) / L, 0, 1)
+            d = np.hypot(p[0] + u * vx - X, p[1] + u * vy - Y) - p[4]
+        else:
+            d = np.hypot(X - p[0], Y - p[1]) - (p[2] if it.kind == 1 else max(p[2], p[3]))
+        near = d <= pad
         for L in (0, 1):
             if (it.layers >> L) & 1:
-                self.hist[L, i0:i1 + 1, j0:j1 + 1] += HISTORY_STEP / 10
+                self.hist[L, i0:i1 + 1, j0:j1 + 1] += np.where(near, HISTORY_STEP / 10, 0).astype(np.float32)
 
     # ------------------------------------------------------------------ pairs
     def route_pair(self, cp: Conn, cn: Conn, rip: bool = False) -> bool:
@@ -1386,6 +1446,11 @@ class Router:
                 continue
             self.conns += net_connections(cu, net, self.next_id)
         self.by_id = {c.id: c for c in self.conns}
+        # Connections leaving the SoC go right after the pairs: other nets must not wall off
+        # the ends of the escape tracks (they are packed at the 0.35 mm pad pitch).
+        for c in self.conns:
+            if c.prio > SOC_RANK and self._touches_u1(c):
+                c.prio = SOC_RANK
         self.log(f"{len(self.conns)} connections to route")
         pairs = {c.id: self.by_id[c.pair] for c in self.conns if c.pair >= 0 and c.net.endswith("_P")}
         self.log(f"{len(pairs)} differential-pair connections routed coupled first")
@@ -1455,6 +1520,9 @@ class Router:
                          f"({conn.tb[0]:.2f}, {conn.tb[1]:.2f})")
         self.failed = [c for c in getattr(self, "failed", []) + failed if not c.done]
         self.stats["failed"] = len(self.failed)
+
+    def _touches_u1(self, c: Conn) -> bool:
+        return any(self.cu.items[k].ref == "U1" for g in (c.a, c.b or []) for k in g)
 
     def _bare_stub(self, group: list[int]) -> bool:
         """An island that is only a U1 pad and its fan-out stub (no escape track)."""
