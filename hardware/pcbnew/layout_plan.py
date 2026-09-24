@@ -860,7 +860,7 @@ def mating_face(geom: FootprintGeom, direction: str) -> tuple[float, str]:
 #
 # U1's pads are 0.20 mm wide on a 0.35 mm pitch. Inside its courtyard the custom rule
 # "u1_fanout_*" allows 0.09 mm, and the router gets a locked 0.10 mm stub per pad out to
-# U1_STUB_END_MM (hardware/pcbnew/autoroute.py). From there every pad continues as a straight
+# U1_STUB_END_MM (hardware/pcbnew/preroute.py). From there every pad continues as a straight
 # radial track on the same 0.35 mm pitch, which meets every net class (0.15 mm + 0.20 mm
 # gap). Those tracks are the pad's *escape channel*. A top-side pad of another net inside
 # a channel would block it, so the planner only accepts top-side placements near the SoC
@@ -871,7 +871,7 @@ def mating_face(geom: FootprintGeom, direction: str) -> tuple[float, str]:
 # through series resistors) are passed through, not around. A decoupled supply pad's channel
 # ends at its first shunt part (the cap); the rail goes on through the planes.
 
-U1_STUB_END_MM = U1_COURTYARD_HALF_MM - 0.10   # the autorouter's locked U1 stubs end here
+U1_STUB_END_MM = U1_COURTYARD_HALF_MM - 0.10   # the pre-routed U1 stubs end here
 ESCAPE_REACH_MM = 12.0            # channels are kept free this far out (square half-size)
 ESCAPE_JOG_MAX_MM = 1.0
 ESCAPE_ALIGN_WEIGHT = 1.0         # search score per mm of sideways offset from the target pad
@@ -982,6 +982,36 @@ def channel_keep(ch: "Channel", o: "Obstacle") -> float:
     return ch.width / 2 + max(ch.clearance, net_clearance(o.net))
 
 
+# Inside the heatsink keep-out (the SoC breakout region) the DRU necks every clearance down
+# to BREAKOUT_CLEARANCE_MM (rule 'soc_breakout_clearance'): the escape tracks use it, the
+# planner keeps the netclass clearances (so its placement leaves the router some room).
+BREAKOUT_CLEARANCE_MM = 0.10
+
+
+FINE_PITCH_MM = 0.5
+
+
+def fine_pitch_refs(plan: "Plan") -> list[str]:
+    """Parts (other than U1) whose closest pads are FINE_PITCH_MM apart or less."""
+    out = []
+    for ref, pl in sorted(plan.placements.items()):
+        pts = [(p.x, p.y) for p in pl.geom.copper_pads()]
+        if ref == "U1" or len(pts) < 3:
+            continue
+        d = min(math.dist(a, b) for i, a in enumerate(pts) for b in pts[i + 1:] if math.dist(a, b) > 1e-6)
+        if d <= FINE_PITCH_MM + 0.01:
+            out.append(ref)
+    return out
+
+
+def track_keep(ch: "Channel", o: "Obstacle") -> float:
+    return ch.width / 2 + BREAKOUT_CLEARANCE_MM
+
+
+def track_pitch(a: "Channel", b: "Channel") -> float:
+    return (a.width + b.width) / 2 + BREAKOUT_CLEARANCE_MM
+
+
 def channel_pitch(a: "Channel", b: "Channel") -> float:
     return (a.width + b.width) / 2 + max(a.clearance, b.clearance)
 
@@ -1005,19 +1035,20 @@ def channel_forbidden(ch: "Channel", obs: list["Obstacle"], r: float) -> list[tu
 class EscapeModel:
     """Placed top-side pads near U1 versus the U1 escape channels (see above)."""
 
-    def __init__(self):
+    def __init__(self, margin: float = 0.0):
         self.channels = escape_channels()
         self.placed: dict[str, list[Obstacle]] = {s: [] for s in self.channels}
+        self.margin = margin          # pads this far outside the zone count as well
 
     @staticmethod
-    def in_zone(r: Rect) -> bool:
-        k = ESCAPE_REACH_MM
+    def in_zone(r: Rect, margin: float = 0.0) -> bool:
+        k = ESCAPE_REACH_MM + margin
         return r[0] < k and r[2] > -k and r[1] < k and r[3] > -k
 
     def obstacles(self, pl: "Placement", nets_by_pad: dict[str, str], shunt: bool) -> list[Obstacle]:
         out = []
         for p, shape in zip(pl.geom.copper_pads(), pl.pad_shapes()):
-            if not self.in_zone(shape.rect):
+            if not self.in_zone(shape.rect, self.margin):
                 continue
             side, t0, t1, r0, r1 = rect_polar(shape.rect)
             if r1 <= U1_STUB_END_MM:
@@ -1112,6 +1143,9 @@ ESCAPE_DROP_COST = 1000.0        # a channel without escape track costs this muc
 ESCAPE_MARGIN_MM = 0.005          # on top of the netclass rules (grid / linearisation slack)
 ESCAPE_BEND_COST = 200.0          # per mm of second difference (one 45-degree bend ~ 5)
 ESCAPE_MILP_SECONDS = 300
+# Pads just outside ESCAPE_REACH_MM still constrain a track ending there (half width +
+# the largest clearance).
+ESCAPE_ZONE_MARGIN_MM = 0.3
 
 
 @dataclass
@@ -1153,10 +1187,10 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
 
     planner = Planner()
     planner.plan = plan
-    model = EscapeModel()
+    model = EscapeModel(margin=ESCAPE_ZONE_MARGIN_MM)
     for ref, p in plan.placements.items():
-        if ref != "U1" and (p.side == "F" or p.tht) and model.in_zone(p.shape().rect):
-            model.add(planner._escape_obstacles(p))
+        if ref != "U1" and (p.side == "F" or p.tht) and model.in_zone(p.shape().rect, model.margin):
+            model.add(planner._escape_obstacles(p, model))
     d = ESCAPE_STEP_MM
     radii = [U1_STUB_END_MM + k * d for k in range(int(round((ESCAPE_REACH_MM - U1_STUB_END_MM) / d)) + 1)]
     out: list[EscapeTrack] = []
@@ -1164,8 +1198,8 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
     def solve(side, chans, r_limit):
         obs = model.placed[side]
         ends = {}
-        for ch in chans:                     # first own pad in line with the channel
-            own = sorted((o for o in obs if o.net in ch.owners and o.t0 - ESCAPE_JOG_MAX_MM <= ch.t
+        for ch in chans:                     # first own-net pad in line with the channel
+            own = sorted((o for o in obs if o.net == ch.net and o.t0 - ESCAPE_JOG_MAX_MM <= ch.t
                           <= o.t1 + ESCAPE_JOG_MAX_MM), key=lambda o: o.r0)
             ends[ch.pad] = own[0] if own else None
         k_limit = int(round((r_limit - radii[0]) / d))
@@ -1189,9 +1223,11 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
         pairs = {}
         for ch in chans:
             for o in obs:
-                if o.net in ch.owners:
+                # the far pads of a series part (other nets of the chain) are obstacles for
+                # the track, even though the planner lets the part sit in the channel
+                if o.net == ch.net:
                     continue
-                kk = channel_keep(ch, o)
+                kk = track_keep(ch, o)
                 if o.t0 - kk - ESCAPE_JOG_MAX_MM < ch.t < o.t1 + kk + ESCAPE_JOG_MAX_MM \
                         and o.r0 - kk < radii[last[ch.pad]]:
                     pairs[(ch.pad, id(o))] = 2 * n + len(pairs)
@@ -1200,7 +1236,7 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
         base = 2 * n + len(pairs) + len(chans)
         sigma = {key: base + v for key, v in index.items()}
         # bend[i,k] = |x[k] - 2 x[k-1] + x[k-2]|: an L1 price on bends keeps the tracks to a
-        # few straight runs (and FreeRouting fast: it chokes on thousands of tiny segments)
+        # few straight runs (fewer vertices for the router and the fab)
         bend = {key: base + n + v for key, v in index.items()}
         nv = base + 2 * n
         rows, cols, vals, rhs = [], [], [], []
@@ -1241,7 +1277,7 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
                     s = pairs.get((ch.pad, id(o)))
                     if s is None:
                         continue
-                    kk = channel_keep(ch, o) + ESCAPE_MARGIN_MM
+                    kk = track_keep(ch, o) + ESCAPE_MARGIN_MM
                     dr = o.r0 - r if r < o.r0 else (r - o.r1 if r > o.r1 else 0.0)
                     if dr >= kk:
                         continue
@@ -1267,7 +1303,7 @@ def escape_tracks(plan: "Plan") -> tuple[list[EscapeTrack], list[str]]:
             act = [ch for ch in chans if last[ch.pad] >= k]
             for ia, a in enumerate(act):
                 for b in act[ia + 1:ia + 5]:
-                    pab = channel_pitch(a, b) + ESCAPE_MARGIN_MM
+                    pab = track_pitch(a, b) + ESCAPE_MARGIN_MM
                     le([(index[(a.pad, k)], 1), (index[(b.pad, k)], -1),
                         (sigma[(a.pad, k)], pab * slant), (sigma[(b.pad, k)], pab * slant),
                         (drop[a.pad], -big), (drop[b.pad], -big)], -pab)
@@ -1343,7 +1379,7 @@ def _seg_seg(p, q, a, b) -> float:
 
 
 def check_escape_tracks(plan: "Plan", tracks: list[EscapeTrack]) -> list[str]:
-    """Exact geometry: every escape track keeps netclass clearance to other-net top pads
+    """Exact geometry: every escape track keeps the breakout clearance to other-net top pads
     and to the other escape tracks (inside U1's courtyard the 0.09 mm fan-out rule)."""
     planner = Planner()
     planner.plan = plan
@@ -1355,9 +1391,8 @@ def check_escape_tracks(plan: "Plan", tracks: list[EscapeTrack]) -> list[str]:
         mapping = plan.pad_maps.get(ref, {})
         nets = {fp: net for spec, net in (comp.conns.items() if comp else ()) for fp in mapping.get(spec, (spec,))}
         for pg, sh in zip(p.geom.copper_pads(), p.pad_shapes()):
-            if EscapeModel.in_zone(sh.rect):
+            if EscapeModel.in_zone(sh.rect, ESCAPE_ZONE_MARGIN_MM):
                 pads.append((sh.rect, nets.get(pg.number, ""), ref))
-    owners = {ch.pad: ch.owners for chans in escape_channels().values() for ch in chans}
     rules = {ch.pad: (ch.width, ch.clearance) for chans in escape_channels().values() for ch in chans}
     problems = []
     segs = []
@@ -1366,9 +1401,9 @@ def check_escape_tracks(plan: "Plan", tracks: list[EscapeTrack]) -> list[str]:
         for a, b in zip(tr.points, tr.points[1:]):
             segs.append((a, b, tr, w, c))
             for rect, net, ref in pads:
-                if net in owners[tr.pad]:
+                if net == tr.net:
                     continue
-                need = w / 2 + max(c, net_clearance(net))
+                need = w / 2 + BREAKOUT_CLEARANCE_MM
                 gap = _seg_rect(a, b, rect)
                 if gap < need - 1e-3:
                     problems.append(f"U1.{tr.pad} ({tr.net}) {gap:.3f} mm from {ref} [{net}] (needs {need:.3f})")
@@ -1381,7 +1416,7 @@ def check_escape_tracks(plan: "Plan", tracks: list[EscapeTrack]) -> list[str]:
             gap = _seg_seg(a, b, a2, b2) - (w1 + w2) / 2
             inside = all(max(abs(v[0]), abs(v[1])) <= U1_COURTYARD_HALF_MM for v in (a, a2)) or \
                 all(max(abs(v[0]), abs(v[1])) <= U1_COURTYARD_HALF_MM for v in (b, b2))
-            need = DESIGN_RULES["min_clearance"] if inside else max(c1, c2)
+            need = DESIGN_RULES["min_clearance"] if inside else BREAKOUT_CLEARANCE_MM
             if gap < need - 1e-3:
                 problems.append(f"U1.{t1.pad} / U1.{t2.pad}: {gap:.3f} mm (needs {need:.3f})")
     return sorted(set(problems))
@@ -1407,7 +1442,7 @@ def escape_json(plan: "Plan", tracks: list[EscapeTrack] | None = None,
     problems = list(problems or [])
     tracks = drop_failing_escapes(plan, tracks, problems)
     return {"comment": "GENERATED by `python3 -m hardware.pcbnew.layout_plan escapes` from "
-                       "board_spec + the layout plan; routed as fixed copper by autoroute.py",
+                       "board_spec + the layout plan; routed as fixed copper by preroute.py",
             "problems": problems,
             "tracks": [{"pad": t.pad, "net": t.net, "width": t.width, "end": t.end,
                         "points": [[round(x, 4), round(y, 4)] for x, y in t.points]}
@@ -1503,13 +1538,13 @@ class Planner:
                 return why
         return None
 
-    def _escape_obstacles(self, pl: Placement) -> list[Obstacle]:
+    def _escape_obstacles(self, pl: Placement, model: "EscapeModel | None" = None) -> list[Obstacle]:
         comp = self.comps.get(pl.ref)
         mapping = self.plan.pad_maps.get(pl.ref, {})
         nets = {fp: net for spec, net in (comp.conns.items() if comp else ())
                 for fp in mapping.get(spec, (spec,))}
         shunt = bool(comp and len(comp.part.pins) == 2 and bs.GND in comp.conns.values())
-        return self.escape.obstacles(pl, nets, shunt)
+        return (model or self.escape).obstacles(pl, nets, shunt)
 
     _CELL = 4.0
 
@@ -2394,7 +2429,39 @@ def dru_text(plan: Plan | None = None) -> str:
               f"    (constraint diff_pair_uncoupled (max {uncoupled}mm))",
               f"    (constraint track_width (min {nc.dp_width * 0.9:.3f}mm) (opt {nc.dp_width:.3f}mm))",
               f"    (condition \"A.NetClass == '{nc.name}' && A.inDiffPair('*')\"))"]
+    usb = [p_net[:-2] for p_net, n_net, cls in bs.DIFF_PAIRS
+           if cls == "USB_90" and p_net in all_nets and n_net in all_nets]
+    if usb:
+        L += ["", "# A 90-ohm USB pair is 0.15 mm wide at a 0.15 mm gap, below the USB_90 clearance (0.2 mm,",
+              "# kept to every other net): between the two nets of one pair the gap is the clearance.",
+              '(rule "usb_90_pair_gap_clearance"',
+              "    (constraint clearance (min 0.135mm))",
+              "    (condition \"" + " || ".join(f"(A.inDiffPair('{b}') && B.inDiffPair('{b}'))" for b in usb)
+              + "\"))"]
     L += ["",
+          "# ---------------------------------------------------------------- SoC breakout (heatsink area)",
+          f"# Between U1's pad ring and the edge of the {2 * bs.KEEPOUT_HALF:g} x {2 * bs.KEEPOUT_HALF:g} mm heatsink "
+          "keep-out sit the 0402",
+          "# decoupling ring and the 0R links, about 1 mm apart: the 0.2 mm clearance of the high-speed",
+          f"# classes does not fit between them. Inside '{HEATSINK_AREA}' (F.Cu) every clearance necks down",
+          f"# to {BREAKOUT_CLEARANCE_MM:g} mm for tracks, pads and vias, like a BGA breakout; pours keep their own",
+          "# clearance and the netclass clearances apply again outside the area.",
+          '(rule "soc_breakout_clearance"',
+          f"    (constraint clearance (min {BREAKOUT_CLEARANCE_MM:g}mm))",
+          f"    (condition \"A.intersectsArea('{HEATSINK_AREA}') && A.Type != 'Zone' && B.Type != 'Zone'\"))",
+          ""]
+    fine = fine_pitch_refs(plan or build_plan())
+    if fine:
+        L += ["# The same neck-down inside the courtyard of every other part with a pin pitch of "
+              f"{FINE_PITCH_MM:g} mm or less",
+              "# (FPC and USB-C connectors, QFN PHY / hub, ESD arrays): a track leaving such a pin runs between",
+              "# the neighbouring pins and the parts in front of them.",
+              '(rule "fine_pitch_fanout_clearance"',
+              f"    (constraint clearance (min {BREAKOUT_CLEARANCE_MM:g}mm))",
+              "    (condition \"(" + " || ".join(f"A.intersectsCourtyard('{r}')" for r in fine)
+              + ") && A.Type != 'Zone' && B.Type != 'Zone'\"))",
+              ""]
+    L += [
           "# ---------------------------------------------------------------- SoC fan-out (0.35 mm pitch)",
           "# Inside the U1 courtyard the netclass clearances cannot be met: neck down to the HDI minimum",
           "# (pads, tracks, vias only -- pours keep their own clearance). The pairs leave U1 as 0.10 mm",

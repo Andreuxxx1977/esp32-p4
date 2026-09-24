@@ -91,11 +91,15 @@ jobs:
       - name: 3D renders (top / bottom) with the parts' 3D models
         if: steps.board.outputs.exists == 'true'
         run: |
+          # the routed board once it exists (same parts, plus copper)
+          RENDER="$BOARD"
+          if [ -f hardware/output/routed/esp32p4_extreme.kicad_pcb ]; then
+            RENDER=hardware/output/routed/esp32p4_extreme.kicad_pcb; fi
           # KiCad's 3D models are a separate library: fetch exactly the ones the board uses
-          export KICAD10_3DMODEL_DIR="$(python3 -m tools.fetch_3d_models "$BOARD" --dest "$RUNNER_TEMP/3d")"
+          export KICAD10_3DMODEL_DIR="$(python3 -m tools.fetch_3d_models "$RENDER" --dest "$RUNNER_TEMP/3d")"
           for side in top bottom; do
             kicad-cli pcb render --side "$side" --width 1600 --height 1200 --quality high \
-              --output "$OUT/board_$side.png" "$BOARD"
+              --output "$OUT/board_$side.png" "$RENDER"
           done
 
       - name: Publish the renders to the 'renders' branch (main only)
@@ -149,7 +153,7 @@ jobs:
 
       - name: Routed board = placed board + copper (footprints, positions, pad nets, zones)
         if: steps.routed.outputs.exists == 'true'
-        run: python3 hardware/pcbnew/autoroute.py --board "$PLACED" --verify "$ROUTED"
+        run: python3 hardware/pcbnew/preroute.py --board "$PLACED" --verify "$ROUTED"
 
       - name: DRC of the routed board (fully connected, no manufacturing/electrical errors)
         if: steps.routed.outputs.exists == 'true'

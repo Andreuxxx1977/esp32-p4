@@ -50,6 +50,29 @@
     (constraint track_width (min 0.122mm) (opt 0.135mm))
     (condition "A.NetClass == 'ETH_100' && A.inDiffPair('*')"))
 
+# A 90-ohm USB pair is 0.15 mm wide at a 0.15 mm gap, below the USB_90 clearance (0.2 mm,
+# kept to every other net): between the two nets of one pair the gap is the clearance.
+(rule "usb_90_pair_gap_clearance"
+    (constraint clearance (min 0.135mm))
+    (condition "(A.inDiffPair('USB1_D') && B.inDiffPair('USB1_D')) || (A.inDiffPair('USBHS_D') && B.inDiffPair('USBHS_D')) || (A.inDiffPair('USB2_D') && B.inDiffPair('USB2_D')) || (A.inDiffPair('USB3_D') && B.inDiffPair('USB3_D')) || (A.inDiffPair('USJ_D') && B.inDiffPair('USJ_D'))"))
+
+# ---------------------------------------------------------------- SoC breakout (heatsink area)
+# Between U1's pad ring and the edge of the 25 x 25 mm heatsink keep-out sit the 0402
+# decoupling ring and the 0R links, about 1 mm apart: the 0.2 mm clearance of the high-speed
+# classes does not fit between them. Inside 'HEATSINK_KEEPOUT' (F.Cu) every clearance necks down
+# to 0.1 mm for tracks, pads and vias, like a BGA breakout; pours keep their own
+# clearance and the netclass clearances apply again outside the area.
+(rule "soc_breakout_clearance"
+    (constraint clearance (min 0.1mm))
+    (condition "A.intersectsArea('HEATSINK_KEEPOUT') && A.Type != 'Zone' && B.Type != 'Zone'"))
+
+# The same neck-down inside the courtyard of every other part with a pin pitch of 0.5 mm or less
+# (FPC and USB-C connectors, QFN PHY / hub, ESD arrays): a track leaving such a pin runs between
+# the neighbouring pins and the parts in front of them.
+(rule "fine_pitch_fanout_clearance"
+    (constraint clearance (min 0.1mm))
+    (condition "(A.intersectsCourtyard('J1') || A.intersectsCourtyard('J2') || A.intersectsCourtyard('J3') || A.intersectsCourtyard('J_CAM') || A.intersectsCourtyard('J_DSI') || A.intersectsCourtyard('U10') || A.intersectsCourtyard('U11') || A.intersectsCourtyard('U3') || A.intersectsCourtyard('U5') || A.intersectsCourtyard('U6')) && A.Type != 'Zone' && B.Type != 'Zone'"))
+
 # ---------------------------------------------------------------- SoC fan-out (0.35 mm pitch)
 # Inside the U1 courtyard the netclass clearances cannot be met: neck down to the HDI minimum
 # (pads, tracks, vias only -- pours keep their own clearance). The pairs leave U1 as 0.10 mm

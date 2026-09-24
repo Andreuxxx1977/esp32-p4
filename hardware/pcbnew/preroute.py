@@ -1,51 +1,33 @@
 #!/usr/bin/env python3
-"""Autoroute the placed board with FreeRouting and write a routed copy.
+"""Pre-route the placed board (the SoC fan-out) and check routed boards against it.
 
-The committed board (``hardware/output/esp32p4_extreme.kicad_pcb``) is placed but
-not routed. This script produces a routed copy for prototype fabrication:
+The committed board (``hardware/output/esp32p4_extreme.kicad_pcb``) is placed but not
+routed. The SoC's 0.35 mm-pitch fan-out is laid down here, deterministically, before the
+board router (``python -m tools.pcb_router``) routes everything else:
 
-1. load the placed board and build a *routing view* of it for the DSN export:
+* U1 fan-out stubs: 0.1 mm tracks from each SoC pad to just inside its courtyard, where
+  the custom DRC rule ``u1_fanout_*`` allows the 0.35 mm pitch;
+* the SoC escape tracks solved by the layout planner (``layout_plan escapes``) from the
+  stub ends through the 0402 decoupling ring;
+* vias inside U1's pad ring for the bottom-side decoupling and the VDD_HP island, the
+  EPAD thermal-via array, and filled-and-capped vias in the pads of plane nets.
 
-   * rule areas that restrict neither tracks nor vias are dropped (KiCad's Specctra
-     exporter turns every rule area into a full keep-out, which would block the
-     whole 25 x 25 mm heatsink area around the SoC);
-   * the outer-layer GND pours are dropped, so every GND pad gets an explicit
-     via to the In1.Cu plane (the router would otherwise treat the unfilled pour
-     polygon as solid copper and leave pads that the real fill can isolate);
-   * the +3V3 plane gets a hole where the VDD_HP island sits (KiCad resolves the
-     overlap by zone priority, the router needs it spelled out);
-   * U1 fan-out stubs: locked 0.1 mm tracks from each SoC pad to just inside its
-     courtyard, where the custom DRC rule ``u1_fanout_*`` allows the 0.35 mm pitch.
-     At netclass clearance (0.2 mm for the MIPI/USB pairs) the router cannot reach
-     a 0.2 mm pad at that pitch; it can reach the end of a 0.1 mm stub.
+``--verify ROUTED`` checks that a routed board is this placed board plus copper (same
+footprints, positions, pad nets and zones); CI runs it on the committed routed board.
 
-2. export Specctra DSN, adjust it for the router (power nets at the SoC routed at a
-   width that fits a 0.2 mm pad, see ``SOC_POWER_WIDTH_UM``), run FreeRouting
-   headless;
-3. import the session into the *unmodified* placed board, fill every zone, save.
+Usage (a Python that can ``import pcbnew``)::
 
-Nothing here checks the result: run ``kicad-cli pcb drc`` and
-``python -m tools.check_drc_report --routed`` on the output (CI does).
-
-Usage (a Python that can ``import pcbnew``; Java >= 25 for FreeRouting 2.4)::
-
-    python3 hardware/pcbnew/autoroute.py --freerouting freerouting-2.4.1-executable.jar \
-        [--board hardware/output/esp32p4_extreme.kicad_pcb] [--out routed/esp32p4_extreme.kicad_pcb]
-        [--java java] [--passes 100] [--threads N] [--timeout 3600] [--work DIR]
-    python3 hardware/pcbnew/autoroute.py --ses board.ses ...      # import an existing session
-    python3 hardware/pcbnew/autoroute.py --verify routed.kicad_pcb  # placement/nets unchanged?
+    python3 hardware/pcbnew/preroute.py [--board PLACED] --out PREROUTED.kicad_pcb
+    python -m tools.pcb_router PREROUTED.kicad_pcb -o ROUTED.kicad_pcb --kicad-cli kicad-cli
+    python3 hardware/pcbnew/preroute.py --verify ROUTED.kicad_pcb
 """
 
 from __future__ import annotations
 
 import argparse
 import math
-import re
 import shutil
-import subprocess
 import sys
-import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -60,16 +42,7 @@ from hardware.lib import esp32p4_pinout as p4  # noqa: E402
 from hardware.pcbnew import layout_plan as lp  # noqa: E402
 
 DEFAULT_BOARD = REPO / "hardware" / "output" / "esp32p4_extreme.kicad_pcb"
-DEFAULT_OUT = REPO / "hardware" / "output" / "routed" / "esp32p4_extreme.kicad_pcb"
-OUTER_POURS = ("GND_TOP", "GND_BOTTOM", "GND_HEAT_SPREADER")
-PLANE_3V3, VDD_HP_ISLAND = "3V3_L3", "VDD_HP_ISLAND"
-
-# Power nets that reach U1's 0.2 mm wide, 0.35 mm pitch pads. KiCad's netclass width
-# is a default, not a DRC limit; at the SoC these rails carry < 0.6 A, which a 0.25 mm
-# outer-layer track (1 oz) carries with ~10 degC rise (IPC-2221).
-SOC_POWER_NETS = ("+3V3", "VDD_HP", "VDD_HP1_PAD")
-SOC_POWER_WIDTH_UM = 250
-SOC_POWER_VIA = "Via[0-3]_450:200_um"
+DEFAULT_OUT = REPO / "build" / "prerouted" / "esp32p4_extreme.kicad_pcb"
 
 U1_STUB_WIDTH_MM = 0.10
 INNER_TRACK_MM = 0.15             # U1 pad -> inner via
@@ -79,13 +52,12 @@ MICROVIA_MM = (0.30, 0.10)        # laser microvia pad / drill (annular ring 0.1
 PLANE_VIA_CLEARANCE_MM = 0.20     # the largest netclass clearance
 
 
-
 def nm(mm: float) -> int:
     return int(round(mm * 1_000_000))
 
 
 # ==========================================================================
-# 1. Routing view of the board
+# 1. Pre-routing: the SoC fan-out
 # ==========================================================================
 
 def zone_name(zone) -> str:
@@ -101,14 +73,6 @@ def origin_of(board) -> tuple[int, int]:
     """Board coordinates (nm) of the design origin = U1's position."""
     p = footprint(board, "U1").GetPosition()
     return p.x, p.y
-
-
-def square_chain(cx: int, cy: int, half: int):
-    chain = pcbnew.SHAPE_LINE_CHAIN()
-    for x, y in ((-half, -half), (half, -half), (half, half), (-half, half)):
-        chain.Append(cx + x, cy + y)
-    chain.SetClosed(True)
-    return chain
 
 
 @dataclass(frozen=True)
@@ -151,13 +115,33 @@ def u1_stubs(board) -> list[PreTrack]:
     return stubs
 
 
+ESCAPE_SIMPLIFY_MM = 0.002        # well inside the solver's 5 um margin
+
+
+def simplify(points: list, tol: float) -> list:
+    """Douglas-Peucker: drop vertices closer than ``tol`` to the line of their neighbours
+    (the solver samples every 25 um of radius, which leaves many tiny collinear steps)."""
+    if len(points) < 3:
+        return list(points)
+    (ax, ay), (bx, by) = points[0], points[-1]
+    L = math.hypot(bx - ax, by - ay) or 1e-12
+    dmax, idx = -1.0, 0
+    for k, (x, y) in enumerate(points[1:-1], 1):
+        d = abs((bx - ax) * (ay - y) - (ax - x) * (by - ay)) / L
+        if d > dmax:
+            dmax, idx = d, k
+    if dmax <= tol:
+        return [points[0], points[-1]]
+    return simplify(points[:idx + 1], tol)[:-1] + simplify(points[idx:], tol)
+
+
 def escape_tracks(board, path: Path | None = None) -> list[PreTrack]:
     """The planner's deterministic SoC escape tracks (layout_plan escape_tracks.json),
     from each U1 stub end through the 0402 ring, as fixed copper for the router."""
     ox, oy = origin_of(board)
     out = []
     for tr in lp.load_escape_tracks(path or lp.ESCAPE_FILE):
-        pts = [(ox + nm(x), oy + nm(y)) for x, y in tr.points]
+        pts = [(ox + nm(x), oy + nm(y)) for x, y in simplify(tr.points, ESCAPE_SIMPLIFY_MM)]
         out += [PreTrack(a, b, nm(tr.width), pcbnew.F_Cu, tr.net) for a, b in zip(pts, pts[1:]) if a != b]
     return out
 
@@ -346,208 +330,25 @@ def add_items(board, tracks: list[PreTrack], vias: list[PreVia]) -> None:
         board.Add(via)
 
 
-def _is_prerouted(item, tracks: list[PreTrack], vias: list[PreVia]) -> bool:
-    if item.GetClass() == "PCB_VIA":
-        p = item.GetPosition()
-        return any(_near((p.x, p.y), v.pos) for v in vias)
-    s, e = item.GetStart(), item.GetEnd()
-    return any(item.GetLayer() == pt.layer and ((_near((s.x, s.y), pt.start) and _near((e.x, e.y), pt.end))
-                                               or (_near((s.x, s.y), pt.end) and _near((e.x, e.y), pt.start)))
-               for pt in tracks)
-
-
-def routing_view(board, zones: list, tracks: list[PreTrack], vias: list[PreVia],
-                 resume: bool = False) -> list[str]:
-    """Modify ``board`` in place into what the router should see. Returns a log.
-    ``zones`` is ``list(board.Zones())`` taken right after loading: some pcbnew/SWIG
-    builds crash walking the zones (or footprints) once items were added or removed.
-    ``resume``: ``board`` is an earlier routed result; its pre-routing is locked, the
-    rest of its copper stays as ordinary (rip-up-able) routing for more passes."""
-    log = []
-    ox, oy = origin_of(board)
-    if resume:
-        kept = 0
-        for item in board.GetTracks():
-            pre = _is_prerouted(item, tracks, vias)
-            item.SetLocked(pre)
-            kept += not pre
-        log.append(f"resume: {kept} routed tracks/vias kept as rip-up-able routing")
-    else:
-        for item in list(board.GetTracks()):     # replaced by the pre-routing (same vias, locked)
-            board.Delete(item)
-        add_items(board, tracks, vias)
-    # The bottom solder-mask window over the thermal-via field (exposed copper for a thermal
-    # pad): no tracks or new vias of other nets in it.
-    tv = bs.THERMAL_VIA                       # same square as layout_plan's B.Mask window
-    half = nm((tv["grid"] - 1) / 2 * tv["pitch_mm"] + tv["pad_mm"] / 2 + PLANE_VIA_CLEARANCE_MM)
-    keep = pcbnew.ZONE(board)
-    keep.SetIsRuleArea(True)
-    keep.SetLayer(pcbnew.B_Cu)
-    keep.SetDoNotAllowTracks(True)
-    keep.SetDoNotAllowVias(True)
-    keep.Outline().AddOutline(square_chain(ox, oy, half))
-    board.Add(keep)
-    log.append("bottom thermal window: track/via keep-out for the router")
-    by_name = {zone_name(z): z for z in zones}
-    if PLANE_3V3 in by_name and VDD_HP_ISLAND in by_name:
-        half = nm(lp.VDD_HP_ISLAND_HALF_MM + lp.ZONE_CLEARANCE_MM)
-        by_name[PLANE_3V3].Outline().AddHole(square_chain(ox, oy, half), 0)
-        log.append(f"cut the {VDD_HP_ISLAND} footprint out of {PLANE_3V3}")
-    for zone in zones:
-        name = zone_name(zone)
-        if zone.GetIsRuleArea():
-            if not (zone.GetDoNotAllowTracks() or zone.GetDoNotAllowVias()):
-                board.Delete(zone)
-                log.append(f"dropped marker rule area {name}")
-        elif name in OUTER_POURS:
-            board.Delete(zone)
-            log.append(f"dropped outer pour {name}")
-    return log
-
-
-# ==========================================================================
-# 2. DSN adjustments and FreeRouting
-# ==========================================================================
-
-_CLASS = re.compile(r"\(class (\S+)((?:\s+[^\s()]+)+)\s*\(circuit", re.S)
-
-
-def adjust_dsn(text: str) -> tuple[str, list[str]]:
-    """Move the SoC power nets into their own, narrower routing class."""
-    log = []
-    m = next((m for m in _CLASS.finditer(text) if m.group(1) == "POWER"), None)
-    if not m:
-        return text, log
-    nets = m.group(2).split()
-    moved = [n for n in nets if n.strip('"') in SOC_POWER_NETS]
-    if not moved:
-        return text, log
-    kept = [n for n in nets if n not in moved]
-    head = "(class POWER " + " ".join(kept) + "\n      (circuit"
-    text = text[:m.start()] + head + text[m.end():]
-    new = (f"    (class POWER_SOC {' '.join(moved)}\n"
-           f"      (circuit\n        (use_via \"{SOC_POWER_VIA}\")\n      )\n"
-           f"      (rule\n        (width {SOC_POWER_WIDTH_UM})\n        (clearance 150)\n      )\n    )\n")
-    i = text.index("    (class POWER ")
-    text = text[:i] + new + text[i:]
-    log.append(f"routing class POWER_SOC ({SOC_POWER_WIDTH_UM} um): {', '.join(moved)}")
-    return text, log
-
-
-# HDI 1+2+1 laser microvias (0.25 / 0.10 mm, board rules in the .kicad_pro): L1-L2 lands
-# on the GND plane, L4-L3 on the +3V3 plane / VDD_HP island. KiCad's DSN export only lists
-# the net classes' through vias, so they are added here for the nets that use planes.
-MICROVIAS = {"Via[0-1]_300:100_um": ("Signal_Top", "GND"),
-             "Via[2-3]_300:100_um": ("VCC_3V3", "Signal_Bottom")}
-MICROVIA_CLASSES = ("kicad_default", "POWER_SOC", "POWER")
-
-
-def add_microvias(text: str) -> tuple[str, list[str]]:
-    size = round(MICROVIA_MM[0] * 1000)
-    stacks = "".join(
-        f"    (padstack \"{name}\"\n"
-        + "".join(f"      (shape (circle {layer} {size}))\n" for layer in layers)
-        + "      (attach off)\n    )\n" for name, layers in MICROVIAS.items()
-        if f'(padstack "{name}"' not in text)          # pre-placed microvias define it already
-    i = text.index("    (padstack \"Via[")
-    text = text[:i] + stacks + text[i:]
-    def extend(m):
-        have = m.group(1)
-        return have + "".join(f' "{n}"' for n in MICROVIAS if f'"{n}"' not in have) + ")"
-    text = re.sub(r"(\(structure.*?\(via [^)]*)\)", extend, text, count=1, flags=re.S)
-    done = []
-    for cls in MICROVIA_CLASSES:
-        pat = re.compile(r"(\(class " + re.escape(cls) + r" .*?\(circuit\s*)(\(use_via [^)]*\))",
-                         re.S)
-        text, n = pat.subn(lambda m: m.group(1) + m.group(2) + "".join(
-            f'\n        (use_via "{v}")' for v in MICROVIAS), text, count=1)
-        if n:
-            done.append(cls)
-    return text, [f"HDI microvias L1-L2 / L3-L4 allowed for classes {', '.join(done)}"]
-
-
-def run_freerouting(java: str, jar: Path, dsn: Path, ses: Path, passes: int,
-                    threads: int | None, timeout: int, logfile: Path,
-                    extra: list[str] = ()) -> int:
-    cmd = [java, "-Djava.awt.headless=true", "-jar", str(jar),
-           "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true",
-           "-de", str(dsn), "-do", str(ses), "-mp", str(passes)]
-    if threads:
-        cmd += ["-mt", str(threads)]
-    cmd += list(extra)
-    t0 = time.time()
-    with logfile.open("w") as fh:
-        try:
-            rc = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout).returncode
-        except subprocess.TimeoutExpired:
-            rc = -1
-    print(f"FreeRouting exited {rc} after {time.time() - t0:.0f} s (log: {logfile})")
-    return rc
-
-
-# ==========================================================================
-# 3. Import, fill, save
-# ==========================================================================
-
-# Via drill by pad diameter: KiCad's session import takes the drill from the net class,
-# which is wrong for the SoC power nets (routed with the 0.45 mm via, POWER says 0.3 mm).
-VIA_DRILL_BY_DIAMETER_MM = {0.45: 0.20, 0.60: 0.30, MICROVIA_MM[0]: MICROVIA_MM[1]}
-
-
-def _near(a, b, tol: int = 2000) -> bool:
-    return abs(a[0] - b[0]) <= tol and abs(a[1] - b[1]) <= tol
-
-
-def import_and_fill(board_path: Path, ses: Path, out: Path, tracks: list[PreTrack],
-                    vias: list[PreVia]) -> list[str]:
-    """Import the session into a copy of the placed board, put the pre-routing back
-    exactly as planned (the session drops or rewrites some fixed items), fix via
-    drills / microvia layers, fill the zones and save."""
+def write_prerouted(board_path: Path, out: Path, tracks: list[PreTrack], vias: list[PreVia]) -> None:
+    """The placed board with only the pre-routing added (existing copper replaced)."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    for suffix in (".kicad_pro", ".kicad_dru"):     # DRC + fill read the project rules
+    for suffix in (".kicad_pro", ".kicad_dru"):
         src = board_path.with_suffix(suffix)
         if src.exists() and src.resolve() != out.with_suffix(suffix).resolve():
             shutil.copyfile(src, out.with_suffix(suffix))
     shutil.copyfile(board_path, out)
     board = pcbnew.LoadBoard(str(out))
-    if not pcbnew.ImportSpecctraSES(board, str(ses)):
-        raise SystemExit(f"importing {ses} failed")
-    fixed, dropped = 0, 0
-    drills = {nm(k): nm(v) for k, v in VIA_DRILL_BY_DIAMETER_MM.items()}
+    zones = list(board.Zones())
     for item in list(board.GetTracks()):
-        if item.GetClass() == "PCB_VIA":
-            p = item.GetPosition()
-            if any(_near((p.x, p.y), v.pos) for v in vias):
-                board.Delete(item)
-                dropped += 1
-                continue
-            d = item.GetWidth(pcbnew.F_Cu)
-            want = drills.get(min(drills, key=lambda k: abs(k - d)))
-            if item.GetDrillValue() != want:
-                item.SetDrill(want)
-                fixed += 1
-            if d == nm(MICROVIA_MM[0]):                 # a microvia the router placed
-                item.SetViaType(pcbnew.VIATYPE_MICROVIA)
-                if item.GetNetname() == bs.GND:
-                    item.SetLayerPair(pcbnew.F_Cu, pcbnew.In1_Cu)
-                else:
-                    item.SetLayerPair(pcbnew.B_Cu, pcbnew.In2_Cu)
-        else:
-            s, e = item.GetStart(), item.GetEnd()
-            if any(item.GetLayer() == pt.layer and ((_near((s.x, s.y), pt.start) and _near((e.x, e.y), pt.end))
-                                                   or (_near((s.x, s.y), pt.end) and _near((e.x, e.y), pt.start)))
-                   for pt in tracks):
-                board.Delete(item)
-                dropped += 1
+        board.Delete(item)
     add_items(board, tracks, vias)
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    pcbnew.ZONE_FILLER(board).Fill(zones)
     pcbnew.SaveBoard(str(out), board)
-    return [f"import: pre-routing restored ({len(tracks)} tracks, {len(vias)} vias; "
-            f"{dropped} session copies replaced), {fixed} via drills corrected"]
 
 
 # ==========================================================================
-# 4. The routed board must be the placed board plus copper
+# 2. The routed board must be the placed board plus copper
 # ==========================================================================
 
 def design_signature(board) -> dict[str, tuple]:
@@ -580,26 +381,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--board", type=Path, default=DEFAULT_BOARD)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--freerouting", type=Path, help="FreeRouting executable jar")
-    ap.add_argument("--java", default="java")
-    ap.add_argument("--passes", type=int, default=100)
-    ap.add_argument("--threads", type=int)
-    ap.add_argument("--timeout", type=int, default=3600, help="seconds for FreeRouting")
     ap.add_argument("--no-u1-stubs", dest="u1_stubs", action="store_false")
     ap.add_argument("--no-escape-tracks", dest="escape_tracks", action="store_false",
                     help="do not pre-route the planner's SoC escape tracks")
-    ap.add_argument("--microvias", action="store_true",
-                    help="let the router use the HDI laser microvias (L1-L2, L3-L4)")
     ap.add_argument("--no-inner-vias", dest="inner_vias", action="store_false",
                     help="no vias inside U1's pad ring for bottom-side decoupling / VDD_HP")
     ap.add_argument("--no-plane-vias", dest="plane_vias", action="store_false",
                     help="do not pre-place vias in the pads of plane nets")
-    ap.add_argument("--work", type=Path, help="keep DSN/SES/log here (default: temp dir)")
-    ap.add_argument("--fr-option", action="append", default=[], metavar="--KEY=VALUE",
-                    help="extra FreeRouting setting, e.g. --fr-option=--router.fanout.enabled=false")
-    ap.add_argument("--ses", type=Path, help="import this session instead of running FreeRouting")
-    ap.add_argument("--resume", type=Path, metavar="ROUTED",
-                    help="start from an earlier routed board (more passes on its routing)")
     ap.add_argument("--verify", type=Path, metavar="ROUTED",
                     help="only check that ROUTED has the placement, pad nets and zones of --board")
     args = ap.parse_args(argv)
@@ -612,56 +400,29 @@ def main(argv: list[str] | None = None) -> int:
               f"{'differs from' if problems else 'is'} {args.board} plus routing "
               f"({len(problems)} difference(s))")
         return 1 if problems else 0
-    if not (args.freerouting or args.ses):
-        ap.error("--freerouting JAR (or --ses SESSION) is required to route")
 
-    work = args.work or Path(tempfile.mkdtemp(prefix="autoroute-"))
-    work.mkdir(parents=True, exist_ok=True)
     board_path = args.board.resolve()
-    view = pcbnew.LoadBoard(str(args.resume.resolve() if args.resume else board_path))
-    zones = list(view.Zones())
-    tracks = u1_stubs(view) if args.u1_stubs else []
-    vias = board_vias(view)
+    board = pcbnew.LoadBoard(str(board_path))
+    tracks = u1_stubs(board) if args.u1_stubs else []
+    vias = board_vias(board)
     log = [f"pre-routing: {len(tracks)} U1 fan-out stubs, {len(vias)} planned vias kept"]
     if args.escape_tracks and args.u1_stubs:
-        esc = escape_tracks(view)
+        esc = escape_tracks(board)
         tracks += esc
         log.append(f"SoC escape tracks: {len(esc)} segments ({lp.ESCAPE_FILE.name})")
     if args.inner_vias:
-        more_tracks, more_vias, note = inner_vias(view, vias)
+        more_tracks, more_vias, note = inner_vias(board, vias)
         tracks += more_tracks
         vias += more_vias
         log += note
     if args.plane_vias:
-        more_vias, note = plane_fanout(view, tracks, vias)
+        more_vias, note = plane_fanout(board, tracks, vias)
         vias += more_vias
         log += note
-    log += routing_view(view, zones, tracks, vias, resume=bool(args.resume))
-    dsn, ses = work / "board.dsn", work / "board.ses"
-    if not pcbnew.ExportSpecctraDSN(view, str(dsn)):
-        raise SystemExit("DSN export failed")
-    text, more = adjust_dsn(dsn.read_text())
-    if args.microvias:
-        text, mv = add_microvias(text)
-        more += mv
-    dsn.write_text(text)
-    for line in log + more:
+    for line in log:
         print("  " + line)
-    if args.ses:
-        ses = args.ses.resolve()
-    else:
-        rc = run_freerouting(args.java, args.freerouting, dsn, ses, args.passes, args.threads,
-                             args.timeout, work / "freerouting.log", args.fr_option)
-        if not ses.exists():
-            print(f"no session written (FreeRouting rc={rc})")
-            return 1
-    for line in import_and_fill(board_path, ses, args.out.resolve(), tracks, vias):
-        print("  " + line)
-    problems = verify_same_design(board_path, args.out.resolve())
-    if problems:
-        print("the routed board no longer matches the placed one:\n  " + "\n  ".join(problems[:50]))
-        return 1
-    print(f"routed board: {args.out} (placement, pad nets and zones unchanged)")
+    write_prerouted(board_path, args.out.resolve(), tracks, vias)
+    print(f"pre-routed board: {args.out}")
     return 0
 
 

@@ -7,11 +7,10 @@ clearance, holes, edge clearance, keep-out/rule-area hits ...).
 
 Once the board is routed, run with ``--strict`` so unconnected items fail too.
 
-``--routed`` is the gate for the autorouted prototype (``hardware/pcbnew/autoroute.py``):
-strict, except that the signal-integrity rules of the .kicad_dru (differential-pair
-gap/coupling, skew, length) are listed as *not met* instead of failing. An
-autorouter does not route coupled pairs; those violations are real and are
-published with the fabrication files, they are not manufacturing defects.
+``--routed`` is the gate for the routed prototype (``tools/pcb_router.py``): strict,
+except that the signal-integrity rules of the .kicad_dru (differential-pair gap/coupling,
+skew, length) are listed as *not met* instead of failing. They are real and are published
+with the fabrication files; they are not manufacturing defects.
 
 Usage::
 

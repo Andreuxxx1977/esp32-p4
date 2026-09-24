@@ -7,3 +7,4 @@ fp-info-cache
 skidl_REPL.*
 *.lck
 ~*.lck
+/build/
