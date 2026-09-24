@@ -13,6 +13,7 @@ Never hand-edit generated files:**
 |---|---|
 | `hardware/output/esp32p4_extreme.net`, `esp32p4_extreme_nets.csv`, `esp32p4_extreme_erc.log` | `python -m hardware.skidl.esp32p4_extreme_netlist` |
 | `docs/TASK1_pinout.md`, `docs/TASK2_mechanical_thermal.md`, `docs/TASK4_bom_pcbway.md`, `hardware/output/bom_pcbway.csv` | `python -m tools.gen_docs` |
+| `hardware/output/esp32p4_extreme.kicad_pcb`, `.kicad_pro`, `.kicad_dru`, `hardware/pcbnew/esp32p4_extreme.kicad_dru` | `python -m hardware.pcbnew.layout_plan dru` then `python -m hardware.pcbnew.write_kicad_pcb` |
 
 Commit the regenerated files **in the same commit** as the spec change. CI fails if they are stale.
 
@@ -28,15 +29,19 @@ python -m hardware.skidl.verify_netlist            # 4. netlist == spec
 python -m hardware.skidl.check_footprints          # 5. if you touched parts/footprints (needs internet;
                                                    #    checks KiCad 10.0.6 libs, --ref to change)
 python -m tools.gen_docs                           # 6. docs + BOM
-python -m pytest -q                                # 7. all tests green
+python -m hardware.pcbnew.layout_plan dru          # 7. DRC rules, then the KiCad project:
+python -m hardware.pcbnew.write_kicad_pcb          #    placement plan -> .kicad_pcb/.kicad_pro/.kicad_dru
+python -m pytest -q                                # 8. all tests green
 ```
 
 ## Conventions in the data model
 
 - **Coordinates:** millimetres, relative to the **ESP32-P4 body centre = (0, 0)**, KiCad axes
   (+X right, **+Y down**). `Place(x, y, rot)` is the footprint origin; for pin headers that is pin 1.
-- **Relative placement:** `Near(ref, pad, max_mm)` means "place within `max_mm` of that pad". The SoC
-  decoupling uses `max_mm = 2.0`.
+- **Relative placement:** `Near(ref, pad, max_mm, side)` means "place within `max_mm` of that pad, on
+  side `F` (top) or `B` (bottom)". The SoC decoupling uses `max_mm = 2.0`. Series/bias parts near
+  the SoC use `SOC_SUPPORT_MAX_MM` (6 mm). The 8 caps in `BOTTOM_DECOUPLING` sit on the bottom under
+  the SoC's right-hand pad ring, which makes assembly double-sided.
 - **Heatsink keep-out:** inside the 25 x 25 mm square around the SoC only **U1 and 0402 passives** are
   allowed (the heatsink sits flush on the SoC). Also keep parts `HEATSINK_HOLE_KEEPOUT_R` (3.5 mm)
   away from the four M2.5 standoff holes. `validate()` enforces both.

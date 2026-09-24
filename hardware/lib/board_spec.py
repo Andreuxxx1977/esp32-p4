@@ -80,11 +80,13 @@ class Near:
 
     ``max_mm`` is the maximum pad-to-pad distance the placer must honour
     (2.0 mm for SoC decoupling, per the hardware specification).
+    ``side`` is the copper side the part is assembled on: "F" (top) or "B" (bottom).
     """
 
     ref: str
     pad: str | None = None
     max_mm: float = 3.0
+    side: str = "F"
 
 
 @dataclass
@@ -457,8 +459,8 @@ GPIO_MAP: tuple[GpioUse, ...] = (
     GpioUse(38, "UART0_RXD", "U0RXD <- CP2102N TXD", "Debug UART", "IO_MUX",
             "Strapping pin (boot-mode 'any value')"),
     # --- USB Serial/JTAG (native JTAG + console on J3) ---
-    GpioUse(24, "USJ_DM", "USB Serial/JTAG D-", "USB-JTAG", "IO_MUX", "22R series"),
-    GpioUse(25, "USJ_DP", "USB Serial/JTAG D+", "USB-JTAG", "IO_MUX", "22R series"),
+    GpioUse(24, "USJ_D_N", "USB Serial/JTAG D- (USJ_DM)", "USB-JTAG", "IO_MUX", "22R series"),
+    GpioUse(25, "USJ_D_P", "USB Serial/JTAG D+ (USJ_DP)", "USB-JTAG", "IO_MUX", "22R series"),
     # --- Camera / display side-band ---
     GpioUse(7, "I2C_SDA", "I2C0 SDA (camera SCCB, touch, header)", "I2C", "GPIO matrix",
             "2.2k pull-up"),
@@ -520,7 +522,7 @@ DEDICATED_NETS: dict[str, str] = {
     "42": "CSI_D0_N", "43": "CSI_D0_P", "44": "CSI_CLK_P", "45": "CSI_CLK_N",
     "46": "CSI_D1_N", "47": "CSI_D1_P", "48": "CSI_REXT",
     # USB 2.0 HS OTG
-    "49": "USBHS_DM", "50": "USBHS_DP",
+    "49": "USBHS_D_N", "50": "USBHS_D_P",
     # clock / reset / DCDC control
     "99": "XTAL_N", "100": "XTAL_P", "103": "CHIP_PU",
     "78": "VDD_HP_FB", "79": "VDD_HP_EN",
@@ -560,13 +562,17 @@ HEATSINK_HOLES = {"H1": (-15.0, -15.0), "H2": (15.0, -15.0),
 HEATSINK_HOLE_KEEPOUT_R = 3.5                   # standoff/washer + clearance
 BOARD_HOLES = {"H5": (-51.0, -36.0), "H6": (51.0, -36.0),
                "H7": (-51.0, 36.0), "H8": (51.0, 36.0)}
-FIDUCIALS = {"FID1": (-52.0, 32.0), "FID2": (52.0, 28.0), "FID3": (47.0, -24.0)}
+FIDUCIALS = {"FID1": (-52.1, 31.4), "FID2": (52.0, 28.0), "FID3": (47.0, -24.0)}
 
 THERMAL_VIA = {"drill_mm": 0.30, "pad_mm": 0.60, "pitch_mm": 1.0, "grid": 7,
                "fill": "IPC-4761 Type VII (resin-filled + copper-capped, VIPPO)",
                "note": "The generated U1 footprint uses ONE solid 7.5 mm EPAD copper pad (paste split "
                        "into 3x3 windows), so vias may sit in the paste gaps or, being VIPPO, under paste."}
-BOTTOM_SPREADER_MM = 14.0                       # exposed B.Cu GND heat spreader under U1 (square)
+BOTTOM_SPREADER_MM = 14.0                       # B.Cu GND heat-spreader copper under U1 (square)
+# Exposed-copper (no solder mask) window for an optional bottom thermal pad: the via
+# field only, because 8 decoupling caps sit on the bottom under the pad ring.
+BOTTOM_THERMAL_WINDOW_MM = round((THERMAL_VIA["grid"] - 1) * THERMAL_VIA["pitch_mm"]
+                                 + THERMAL_VIA["pad_mm"], 3)
 
 HEATSINK = {
     "base_mm": (25.0, 25.0), "height_mm": 10.0, "material": "Al 6063-T5, black anodised",
@@ -640,30 +646,46 @@ SOC_DECOUPLING: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("101", "+3V3", ("10nF", "100nF")),          # VDD_ANA
     ("102", "VDD_BAT", ("100nF", "10uF")),       # VDD_BAT
 )
+# The right-hand edge of the SoC (pads 54-77) carries 19 decoupling caps for ~9 mm
+# of package edge: more than one 0402 row can hold within 2 mm. These 8 go on the
+# bottom side, directly under the pad ring (outside the thermal-via field), which is
+# also the lowest-inductance spot. Decision: double-sided assembly (owner, 2026-09-24).
+BOTTOM_DECOUPLING: frozenset[tuple[str, str]] = frozenset({
+    ("62", "1uF"), ("67", "100nF"), ("71", "1uF"), ("74", "1uF"),
+    ("75", "10uF"), ("76", "100nF"), ("76", "10uF"), ("77", "10uF"),
+})
 for _pad, _net, _vals in SOC_DECOUPLING:
     for _v in _vals:
-        C(_v, _net, GND, "SoC decoupling", place=Near("U1", _pad, 2.0),
-          note=f"U1 pad {_pad} {p4.PAD_NAME[_pad]}")
+        _side = "B" if (_pad, _v) in BOTTOM_DECOUPLING else "F"
+        C(_v, _net, GND, "SoC decoupling", place=Near("U1", _pad, 2.0, side=_side),
+          note=f"U1 pad {_pad} {p4.PAD_NAME[_pad]}" + (" (bottom side)" if _side == "B" else ""))
+
+# Only the decoupling caps above must sit within 2 mm of their pad. The series /
+# bias / strap parts below just need to be "close to the chip" (Espressif): they
+# stay 0402 inside the heatsink keep-out but may use the second ring (<= 6 mm),
+# which leaves the 52 inner top-side slots to the caps -> single-sided assembly.
+SOC_SUPPORT_MAX_MM = 6.0
+XTAL_SERIES_MAX_MM = 4.0
 
 _G = "SoC support"
-R("0", "+3V3", "VDD_USBPHY", _G, place=Near("U1", "51", 2.0), note="VDD_USBPHY feed (Espressif R40)")
-R("0", "+3V3", "VDD_BAT", _G, place=Near("U1", "102", 2.0), note="VDD_BAT from 3V3 (no coin cell)")
-R("0", "VDD_HP", "VDD_HP1_PAD", _G, place=Near("U1", "54", 2.0), note="Espressif R39 (pad 54 rev-compat)")
-R("4.02k", "DSI_REXT", GND, _G, place=Near("U1", "34", 2.0), note="MIPI DSI bias, 1 %")
-R("4.02k", "CSI_REXT", GND, _G, place=Near("U1", "48", 2.0), note="MIPI CSI bias, 1 %")
-R("10k", "+3V3", "CHIP_PU", _G, place=Near("U1", "103", 2.0), note="CHIP_PU RC delay (10k/1uF)")
-C("1uF", "CHIP_PU", GND, _G, place=Near("U1", "103", 2.0), note="CHIP_PU RC delay")
-R("10k", "+3V3", "RMII_TXD1", _G, place=Near("U1", "66", 3.0), note="GPIO35 boot strap pull-up (SPI boot)")
-R("10k", "+3V3", "STRAP_GPIO36", _G, place=Near("U1", "68", 3.0), note="GPIO36 strap pull-up")
-R("1k", "RMII_TXD1", "BOOT_BTN", _G, place=Near("U1", "66", 3.0),
+R("0", "+3V3", "VDD_USBPHY", _G, place=Near("U1", "51", SOC_SUPPORT_MAX_MM), note="VDD_USBPHY feed (Espressif R40)")
+R("0", "+3V3", "VDD_BAT", _G, place=Near("U1", "102", SOC_SUPPORT_MAX_MM), note="VDD_BAT from 3V3 (no coin cell)")
+R("0", "VDD_HP", "VDD_HP1_PAD", _G, place=Near("U1", "54", SOC_SUPPORT_MAX_MM), note="Espressif R39 (pad 54 rev-compat)")
+R("4.02k", "DSI_REXT", GND, _G, place=Near("U1", "34", SOC_SUPPORT_MAX_MM), note="MIPI DSI bias, 1 %")
+R("4.02k", "CSI_REXT", GND, _G, place=Near("U1", "48", SOC_SUPPORT_MAX_MM), note="MIPI CSI bias, 1 %")
+R("10k", "+3V3", "CHIP_PU", _G, place=Near("U1", "103", SOC_SUPPORT_MAX_MM), note="CHIP_PU RC delay (10k/1uF)")
+C("1uF", "CHIP_PU", GND, _G, place=Near("U1", "103", SOC_SUPPORT_MAX_MM), note="CHIP_PU RC delay")
+R("10k", "+3V3", "RMII_TXD1", _G, place=Near("U1", "66", SOC_SUPPORT_MAX_MM), note="GPIO35 boot strap pull-up (SPI boot)")
+R("10k", "+3V3", "STRAP_GPIO36", _G, place=Near("U1", "68", SOC_SUPPORT_MAX_MM), note="GPIO36 strap pull-up")
+R("1k", "RMII_TXD1", "BOOT_BTN", _G, place=Near("U1", "66", SOC_SUPPORT_MAX_MM),
   note="Isolates the ~50 mm BOOT button / auto-program stub from the 50 MHz RMII TXD1 line; "
        "pressed: 3.3 V x 1k/11k = 0.3 V < VIL")
-R("1M", "USBHS_DP", GND, _G, place=Near("U1", "50", 2.0), dnp=True,
+R("1M", "USBHS_D_P", GND, _G, place=Near("U1", "50", SOC_SUPPORT_MAX_MM), dnp=True,
   note="Espressif rev1.x DP pull-down, DNP on rev v3.x")
 
 # 40 MHz crystal: 0R series at the chip, load caps at the crystal (>= 4.5 mm away).
-R("0", "XTAL_P", "XTAL_P_Y", "Clock", place=Near("U1", "100", 2.0), note="Espressif R3")
-R("0", "XTAL_N", "XTAL_N_Y", "Clock", place=Near("U1", "99", 2.0), note="Espressif R4")
+R("0", "XTAL_P", "XTAL_P_Y", "Clock", place=Near("U1", "100", XTAL_SERIES_MAX_MM), note="Espressif R3")
+R("0", "XTAL_N", "XTAL_N_Y", "Clock", place=Near("U1", "99", XTAL_SERIES_MAX_MM), note="Espressif R4")
 add("Y1", XTAL40, {"XIN": "XTAL_P_Y", "XOUT": "XTAL_N_Y", "2": GND, "4": GND}, "Clock",
     place=Place(-3.5, -15.0, 0.0),
     note="Outside keep-out; Espressif requires >= 4.5 mm from the clock pads, no vias on XTAL traces")
@@ -676,7 +698,7 @@ C("12pF", "XTAL_N_Y", GND, "Clock", place=Near("Y1", "3", 2.0),
 _G = "QSPI flash"
 for _sig in ("CS", "Q", "WP", "HOLD", "CK", "D"):
     R("0", f"FLASH_{_sig}", f"FLASH_{_sig}_M", _G, place=Near("U1", {
-        "CS": "27", "Q": "28", "WP": "29", "HOLD": "31", "CK": "32", "D": "33"}[_sig], 2.5),
+        "CS": "27", "Q": "28", "WP": "29", "HOLD": "31", "CK": "32", "D": "33"}[_sig], SOC_SUPPORT_MAX_MM),
       note="Espressif-recommended series footprint (drive/EMI tuning)")
 add("U2", FLASH, {"~CS": "FLASH_CS_M", "DO/IO1": "FLASH_Q_M", "~WP/IO2": "FLASH_WP_M",
                   "GND": GND, "DI/IO0": "FLASH_D_M", "CLK": "FLASH_CK_M",
@@ -690,7 +712,7 @@ _G = "VDD_HP DCDC"
 add("U4", BUCK_HP, {"EN": "VDD_HP_EN", "GND": GND, "SW": "HP_SW", "VIN": "+3V3",
                     "FB": "VDD_HP_FB"}, _G, place=Place(16.5, -7.5, 0.0),
     note="Espressif-verified model; EN/FB fully controlled by ESP32-P4")
-add("L2", IND_HP, {"1": "HP_SW", "2": "VDD_HP"}, _G, place=Place(20.0, -8.5, 0.0))
+add("L2", IND_HP, {"1": "HP_SW", "2": "VDD_HP"}, _G, place=Place(20.55, -8.5, 0.0))
 C("4.7uF", "+3V3", GND, _G, place=Near("U4", "4", 2.0), note="Espressif C1")
 C("22uF", "VDD_HP", GND, _G, size="0805", place=Near("L2", "2"), note="Espressif C3")
 R("499k", "VDD_HP", "VDD_HP_FB", _G, place=Near("U4", "5"), note="Espressif R1 (rev v3.x: populate)")
@@ -744,40 +766,40 @@ def usb_port(ref: str, vbus: str, dp: str, dm: str, esd: PartType, esd_ref: str,
                      "A5": f"{ref}_CC1", "B5": f"{ref}_CC2",
                      "A1": GND, "A12": GND, "B1": GND, "B12": GND, "SH": GND}, group,
         place=place)
-    R("5.1k", f"{ref}_CC1", GND, group, place=Near(ref, "A5"), note="UFP Rd")
-    R("5.1k", f"{ref}_CC2", GND, group, place=Near(ref, "B5"), note="UFP Rd")
+    R("5.1k", f"{ref}_CC1", GND, group, place=Near(ref, "A5", 5.0), note="UFP Rd")
+    R("5.1k", f"{ref}_CC2", GND, group, place=Near(ref, "B5", 5.0), note="UFP Rd")
     if esd is ESD_USB:           # USBLC6-2SC6: flow-through, VBUS clamp
         esd_conns = {"1": dp, "6": dp, "3": dm, "4": dm, "VBUS": vbus, "GND": GND}
     else:                        # TPD2EUSB30: D+, D-, GND
         esd_conns = {"D+": dp, "D-": dm, "GND": GND}
-    add(esd_ref, esd, esd_conns, group, place=Near(ref, "A6", 5.0))
-    C("10uF", vbus, GND, group, size="0805", place=Near(ref, "A4"))
+    add(esd_ref, esd, esd_conns, group, place=Near(ref, "A6", 7.0))
+    C("10uF", vbus, GND, group, size="0805", place=Near(ref, "A4", 5.0))
 
 
 # J1: native USB 2.0 High-Speed OTG (UTMI PHY)
 _G = "USB1 HS"
-usb_port("J1", "VBUS1", "USB1_DP", "USB1_DM", ESD_USB_HS, "U7", _G,
+usb_port("J1", "VBUS1", "USB1_D_P", "USB1_D_N", ESD_USB_HS, "U7", _G,
          Place(22.0, 36.0, 0.0, faces="bottom"))
-R("0", "USB1_DP", "USBHS_DP", _G, place=Near("U1", "50", 2.5), note="Espressif: reserve R/C near SoC")
-R("0", "USB1_DM", "USBHS_DM", _G, place=Near("U1", "49", 2.5), note="Espressif: reserve R/C near SoC")
+R("0", "USB1_D_P", "USBHS_D_P", _G, place=Near("U1", "50", SOC_SUPPORT_MAX_MM), note="Espressif: reserve R/C near SoC")
+R("0", "USB1_D_N", "USBHS_D_N", _G, place=Near("U1", "49", SOC_SUPPORT_MAX_MM), note="Espressif: reserve R/C near SoC")
 
 # J2: debug UART through CP2102N (self-powered from +3V3)
 _G = "USB2 debug UART"
-usb_port("J2", "VBUS2", "USB2_DP", "USB2_DM", ESD_USB, "U8", _G,
+usb_port("J2", "VBUS2", "USB2_D_P", "USB2_D_N", ESD_USB, "U8", _G,
          Place(-51.0, 22.0, 0.0, faces="left"))
-add("U6", UART_BRIDGE, {"D+": "USB2_DP", "D-": "USB2_DM", "VIO": "+3V3", "VDD": "+3V3",
+add("U6", UART_BRIDGE, {"D+": "USB2_D_P", "D-": "USB2_D_N", "VIO": "+3V3", "VDD": "+3V3",
                         "VREGIN": "+3V3", "VBUS": "CP_VBUS_SENSE", "~RST": "CP_RST_N",
                         "~RTS": "CP_RTS", "~DTR": "CP_DTR", "RXD": "UART0_TXD",
                         "TXD": "UART0_RXD", "2": GND, "25": GND}, _G,
-    place=Place(-42.0, 19.0, 0.0), note="Self-powered configuration")
-R("22.1k", "VBUS2", "CP_VBUS_SENSE", _G, place=Near("U6", "8"), note="VBUS sense divider")
-R("47.5k", "CP_VBUS_SENSE", GND, _G, place=Near("U6", "8"), note="VBUS sense divider")
-R("1k", "+3V3", "CP_RST_N", _G, place=Near("U6", "9"))
+    place=Place(-39.55, 19.0, 0.0), note="Self-powered configuration")
+R("22.1k", "VBUS2", "CP_VBUS_SENSE", _G, place=Near("U6", "8", 5.0), note="VBUS sense divider")
+R("47.5k", "CP_VBUS_SENSE", GND, _G, place=Near("U6", "8", 5.0), note="VBUS sense divider")
+R("1k", "+3V3", "CP_RST_N", _G, place=Near("U6", "9", 5.0))
 C("100nF", "+3V3", GND, _G, place=Near("U6", "6", 2.0))
 C("1uF", "+3V3", GND, _G, place=Near("U6", "6", 2.0))
 C("100nF", "+3V3", GND, _G, place=Near("U6", "7", 2.0))
 C("1uF", "+3V3", GND, _G, place=Near("U6", "7", 2.0))
-C("100nF", "+3V3", GND, _G, place=Near("U6", "5", 2.0))
+C("100nF", "+3V3", GND, _G, place=Near("U6", "5", 3.0))
 # Classic Espressif auto-program circuit (esptool DTR/RTS sequence).
 add("Q1", DUAL_NPN, {"B1": "Q1_B1", "E1": "CP_RTS", "C1": "CHIP_PU",
                      "B2": "Q1_B2", "E2": "CP_DTR", "C2": "BOOT_BTN"}, _G,
@@ -787,10 +809,10 @@ R("10k", "CP_RTS", "Q1_B2", _G, place=Near("Q1", "5"))
 
 # J3: native USB Serial/JTAG (GPIO24/25) -> JTAG + console with zero config
 _G = "USB3 USB-Serial-JTAG"
-usb_port("J3", "VBUS3", "USB3_DP", "USB3_DM", ESD_USB, "U9", _G,
+usb_port("J3", "VBUS3", "USB3_D_P", "USB3_D_N", ESD_USB, "U9", _G,
          Place(-51.0, 8.0, 0.0, faces="left"))
-R("22", "USB3_DP", "USJ_DP", _G, place=Near("U1", "53", 2.5), note="Espressif FS series R")
-R("22", "USB3_DM", "USJ_DM", _G, place=Near("U1", "52", 2.5), note="Espressif FS series R")
+R("22", "USB3_D_P", "USJ_D_P", _G, place=Near("U1", "53", SOC_SUPPORT_MAX_MM), note="Espressif FS series R")
+R("22", "USB3_D_N", "USJ_D_N", _G, place=Near("U1", "52", SOC_SUPPORT_MAX_MM), note="Espressif FS series R")
 
 # ------------------------------------------------------------ Ethernet ---
 _G = "Ethernet"
@@ -806,7 +828,7 @@ add("U5", PHY, {"VDD2A": "PHY_AVDD", "LED2/~INTSEL": "PHY_LED2", "LED1/REGOFF": 
 # RMII series terminations: at the driver (SoC for TX, PHY for RX/CLK).
 for _net, _anchor in (("RMII_TXD0", ("U1", "65")), ("RMII_TXD1", ("U1", "66")),
                       ("RMII_TX_EN", ("U1", "92"))):
-    R("22", _net, f"{_net}_PHY", _G, place=Near(*_anchor, 2.5), note="Source termination at SoC")
+    R("22", _net, f"{_net}_PHY", _G, place=Near(*_anchor, SOC_SUPPORT_MAX_MM), note="Source termination at SoC")
 for _net, _pad in (("RMII_RXD0", "8"), ("RMII_RXD1", "7"), ("RMII_CRS_DV", "11"),
                    ("RMII_REF_CLK", "14")):
     R("33" if _net == "RMII_REF_CLK" else "22", f"{_net}_PHY", _net, _G,
@@ -816,7 +838,7 @@ add("Y2", XTAL25, {"XIN": "PHY_XI", "XOUT": "PHY_XO", "2": GND, "4": GND}, _G,
 C("18pF", "PHY_XI", GND, _G, place=Near("Y2", "1"), note="C_L = 12 pF: 2 x (12 - 3 pF stray)")
 C("18pF", "PHY_XO", GND, _G, place=Near("Y2", "3"), note="C_L = 12 pF: 2 x (12 - 3 pF stray)")
 R("12.1k", "PHY_RBIAS", GND, _G, place=Near("U5", "24", 2.0), note="RBIAS 1 %")
-R("10k", "PHY_LED2", GND, _G, place=Near("U5", "2"), note="nINTSEL = 0 -> REF_CLK-out (50 MHz on pin 14)")
+R("10k", "PHY_LED2", GND, _G, place=Near("U5", "2", 5.0), note="nINTSEL = 0 -> REF_CLK-out (50 MHz on pin 14)")
 R("10k", "PHY_RXER", GND, _G, place=Near("U5", "10"), note="PHYAD0 = 0")
 R("10k", "+3V3", "ETH_PHY_RST_N", _G, place=Near("U5", "15"))
 R("1.5k", "+3V3", "ETH_MDIO", _G, place=Near("U5", "12"), note="MDIO pull-up")
@@ -829,26 +851,27 @@ C("1uF", "PHY_VDDCR", GND, _G, place=Near("U5", "6", 2.0))
 C("470pF", "PHY_VDDCR", GND, _G, place=Near("U5", "6", 2.0))
 for _net in ("ETH_TX_P", "ETH_TX_N", "ETH_RX_P", "ETH_RX_N"):
     R("49.9", _net, "PHY_AVDD", _G, place=Near("U5", {"ETH_TX_P": "21", "ETH_TX_N": "20",
-                                                      "ETH_RX_P": "23", "ETH_RX_N": "22"}[_net]),
+                                                      "ETH_RX_P": "23", "ETH_RX_N": "22"}[_net], 4.0),
       note="LAN8720A line termination")
 add("J4", RJ45, {"TD+": "ETH_TX_P", "TD-": "ETH_TX_N", "RD+": "ETH_RX_P", "RD-": "ETH_RX_N",
                  "TCT": "ETH_CT", "RCT": "ETH_CT", "GND": GND,
                  "LED_G_A": "ETH_LED_LINK_A", "LED_G_K": GND,
                  "LED_Y_A": "ETH_LED_SPEED_A", "LED_Y_K": GND, "SH": GND}, _G,
-    place=Place(46.0, 3.0, 0.0, faces="right"))
+    place=Place(37.24, 3.0, 0.0, faces="right"),
+    note="Footprint origin = pin 1 (not the body centre); rotated so the jack faces the right edge")
 add("FB2", FERRITE, {"1": "PHY_AVDD", "2": "ETH_CT"}, _G, place=Near("J4", "4", 6.0))
 C("100nF", "ETH_CT", GND, _G, place=Near("J4", "4", 6.0))
 C("10nF", "ETH_CT", GND, _G, place=Near("J4", "4", 6.0))
 R("330", "PHY_LED1", "ETH_LED_LINK_A", _G, place=Near("U5", "3"), note="Link/activity LED")
-R("330", "PHY_LED2", "ETH_LED_SPEED_A", _G, place=Near("U5", "2"), note="Speed LED")
+R("330", "PHY_LED2", "ETH_LED_SPEED_A", _G, place=Near("U5", "2", 5.0), note="Speed LED")
 
 # ------------------------------------------------------------- microSD ---
 _G = "microSD"
 _SD_SIG = {"D0": "80", "D1": "81", "D2": "82", "D3": "83", "CLK": "84", "CMD": "86"}
 for _sig, _pad in _SD_SIG.items():
-    R("0", f"SD_{_sig}", f"SD_{_sig}_C", _G, place=Near("U1", _pad, 2.5),
+    R("0", f"SD_{_sig}", f"SD_{_sig}_C", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
       note="Espressif: reserve series R on every SDIO line")
-C("10pF", "SD_CLK_C", GND, _G, place=Near("U1", "84", 3.0), dnp=True,
+C("10pF", "SD_CLK_C", GND, _G, place=Near("U1", "84", SOC_SUPPORT_MAX_MM), dnp=True,
   note="Espressif: reserve CLK cap for tuning")
 for _sig in ("D0", "D1", "D2", "D3", "CMD"):
     R("51k", f"SD_{_sig}_C", "VDDO_4_SDIO", _G, place=Near("J5", None, 6.0),
@@ -877,7 +900,7 @@ C("100nF", "SD_VDD", GND, _G, place=Near("J5", "4", 2.0))
 _G = "Camera CSI"
 for _lane, _pads in (("D0", ("43", "42")), ("D1", ("47", "46")), ("CLK", ("44", "45"))):
     for _pol, _pad in zip(("P", "N"), _pads):
-        R("0", f"CSI_{_lane}_{_pol}", f"CAM_{_lane}_{_pol}", _G, place=Near("U1", _pad, 2.5),
+        R("0", f"CSI_{_lane}_{_pol}", f"CAM_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
           note="Espressif: reserve 0R on MIPI lines")
 add("J_CAM", FPC22, {"D0_N": "CAM_D0_N", "D0_P": "CAM_D0_P", "D1_N": "CAM_D1_N",
                      "D1_P": "CAM_D1_P", "CLK_N": "CAM_CLK_N", "CLK_P": "CAM_CLK_P",
@@ -893,7 +916,7 @@ C("100nF", "+3V3", GND, _G, place=Near("J_CAM", "22"))
 _G = "Display DSI"
 for _lane, _pads in (("D0", ("39", "40")), ("D1", ("35", "36")), ("CLK", ("38", "37"))):
     for _pol, _pad in zip(("P", "N"), _pads):
-        R("0", f"DSI_{_lane}_{_pol}", f"DISP_{_lane}_{_pol}", _G, place=Near("U1", _pad, 2.5),
+        R("0", f"DSI_{_lane}_{_pol}", f"DISP_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
           note="Espressif: reserve 0R on MIPI lines")
 add("J_DSI", FPC22, {"D0_N": "DISP_D0_N", "D0_P": "DISP_D0_P", "D1_N": "DISP_D1_N",
                      "D1_P": "DISP_D1_P", "CLK_N": "DISP_CLK_N", "CLK_P": "DISP_CLK_P",
@@ -935,7 +958,7 @@ _G = "UI"
 add("SW1", TACT, {"1": "CHIP_PU", "2": GND}, _G,
     place=Place(-40.0, -35.0, 0.0), note="RESET")
 add("SW2", TACT, {"1": "BOOT_BTN", "2": GND}, _G,
-    place=Place(-33.0, -35.0, 0.0), note="BOOT (GPIO35)")
+    place=Place(-33.0, -35.1, 0.0), note="BOOT (GPIO35)")
 add("D5", LED_R, {"A": "LED_STATUS_A", "K": GND}, _G, place=Place(-43.0, -27.0, 0.0),
     note="User status LED")
 R("1k", "LED_STATUS", "LED_STATUS_A", _G, place=Near("D5", "2"))
@@ -947,8 +970,8 @@ HEADER_PINOUT: tuple[str, ...] = (
     "GPIO19", "GPIO22", "GPIO23", "GPIO32", "GPIO33", "GPIO53", "GPIO54",
 )
 add("J6", HDR_2X12, {str(i): n for i, n in enumerate(HEADER_PINOUT, 1)}, "Header",
-    place=Place(-50.5, -27.0, 0.0),
-    note="Footprint origin = pin 1; rows run +Y to y = +0.9 mm")
+    place=Place(-50.5, -27.1, 0.0),
+    note="Footprint origin = pin 1; rows run +Y to y = +0.8 mm")
 
 # ------------------------------------------- SPI / I2C TFT display header ---
 # Second display option next to the MIPI-DSI FPC: the common ST7789 / ILI9341 /
@@ -1002,7 +1025,7 @@ def nets() -> dict[str, list[tuple[str, str]]]:
 
 
 NETCLASS_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("USB_90", r"^(USB1_D[PM]|USBHS_D[PM]|USB2_D[PM]|USB3_D[PM]|USJ_D[PM])$"),
+    ("USB_90", r"^(USB1|USBHS|USB2|USB3|USJ)_D_[PN]$"),
     ("MIPI_100", r"^(CSI|CAM|DSI|DISP)_(D[01]|CLK)_[PN]$"),
     ("ETH_100", r"^ETH_(TX|RX)_[PN]$"),
     ("SE_50", r"^(SD_(D[0-3]|CLK|CMD)(_C)?|RMII_.*|FLASH_(CS|Q|WP|HOLD|CK|D)(_M)?|XTAL_[PN](_Y)?)$"),
@@ -1018,9 +1041,7 @@ def netclass_of(net: str) -> str:
 
 
 DIFF_PAIRS: tuple[tuple[str, str, str], ...] = tuple(
-    (f"{base}_P" if not base.startswith("USB") and not base.startswith("USJ") else base + "P",
-     f"{base}_N" if not base.startswith("USB") and not base.startswith("USJ") else base + "M",
-     cls)
+    (f"{base}_P", f"{base}_N", cls)     # KiCad recognises pairs by the _P/_N suffix
     for base, cls in (
         ("USB1_D", "USB_90"), ("USBHS_D", "USB_90"), ("USB2_D", "USB_90"),
         ("USB3_D", "USB_90"), ("USJ_D", "USB_90"),
@@ -1029,6 +1050,11 @@ DIFF_PAIRS: tuple[tuple[str, str, str], ...] = tuple(
         ("ETH_TX", "ETH_100"), ("ETH_RX", "ETH_100"),
     )
 )
+
+
+def bottom_side_refs() -> list[str]:
+    """References assembled on the bottom side (B.Cu)."""
+    return [c.ref for c in COMPONENTS if c.place is not None and c.place.side == "B"]
 
 
 def is_keepout_exempt(comp: Component) -> bool:
@@ -1062,7 +1088,7 @@ def validate() -> list[str]:
         "RMII_TXD1": "RMII_TXD1", "RMII_CRS_DV": "RMII_CRS_DV", "RMII_RXD0": "RMII_RXD0",
         "RMII_RXD1": "RMII_RXD1", "SD0_CLK": "SD_CLK", "SD0_CMD": "SD_CMD", "SD0_D0": "SD_D0",
         "SD0_D1": "SD_D1", "SD0_D2": "SD_D2", "SD0_D3": "SD_D3", "U0TXD": "UART0_TXD",
-        "U0RXD": "UART0_RXD", "USJ_DM": "USJ_DM", "USJ_DP": "USJ_DP",
+        "U0RXD": "UART0_RXD", "USJ_DM": "USJ_D_N", "USJ_DP": "USJ_D_P",
         "LP_U0TXD": "LP_UART_TXD", "LP_U0RXD": "LP_UART_RXD",
     }
     by_net = {u.net: u.gpio for u in GPIO_MAP}
@@ -1099,6 +1125,14 @@ def validate() -> list[str]:
         for hole, (hx, hy) in HEATSINK_HOLES.items():
             if ((comp.place.x - hx) ** 2 + (comp.place.y - hy) ** 2) ** 0.5 < HEATSINK_HOLE_KEEPOUT_R + 1.0:
                 errors.append(f"{comp.ref} placed within {HEATSINK_HOLE_KEEPOUT_R + 1.0} mm of {hole}")
+    # 7c. bottom-side parts: small passives only (they sit under the SoC pad ring)
+    for comp in COMPONENTS:
+        side = comp.place.side if comp.place is not None else "F"
+        if side not in ("F", "B"):
+            errors.append(f"{comp.ref}: side must be 'F' or 'B', got {side!r}")
+        elif side == "B" and not (comp.part.kind in ("res", "cap")
+                                  and comp.part.package in ("0402", "0603")):
+            errors.append(f"{comp.ref}: only 0402/0603 passives may be on the bottom side")
     # 8. decoupling must be 0402 (so it is legal inside the keep-out)
     for comp in COMPONENTS:
         if isinstance(comp.place, Near) and comp.place.ref == "U1" and not is_keepout_exempt(comp):

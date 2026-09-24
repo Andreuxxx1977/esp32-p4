@@ -80,7 +80,8 @@ BASE_T_MM = 2.0
 BOARD_SPREAD_EFF = 0.30      # fraction of the 110 x 80 mm board that is effectively isothermal
 H_BOARD_EXHAUST = 25.0       # W/m2.K, board top surface in the fan exhaust
 T_AMB = 40.0                 # degC, enclosure ambient used for the Tj estimate
-SPREADER_MM = 14.0           # exposed B.Cu spreader under U1 (NOT in board_spec -- see TASK 2)
+SPREADER_MM = bs.BOTTOM_SPREADER_MM        # B.Cu GND spreader copper under U1
+WINDOW_MM = bs.BOTTOM_THERMAL_WINDOW_MM     # exposed (mask-free) part of it: the via field
 GAP_PAD_MM, K_GAP_PAD = 1.0, 3.0   # optional bottom gap pad to a chassis
 POWER_ESTIMATE = (
     # contributor, low W, high W, basis
@@ -1189,7 +1190,7 @@ def bom_summary() -> dict:
     comps = [c for c in bs.COMPONENTS if c.part.kind != "mech" and not c.dnp]
     smd = [c for c in comps if not c.part.tht]
     tht = [c for c in comps if c.part.tht]
-    sides = {c.place.side for c in bs.COMPONENTS if isinstance(c.place, bs.Place)}
+    sides = {c.place.side for c in bs.COMPONENTS if c.place is not None}
     return {
         "lines": len(fit), "placements": sum(int(r[2]) for r in fit), "comps": len(comps),
         "smd_lines": sum(1 for r in fit if r[8] == "SMD"), "tht_lines": sum(1 for r in fit if r[8] == "THT"),
@@ -1204,7 +1205,10 @@ def bom_summary() -> dict:
 def render_task4() -> str:
     rows = bom_rows()
     s = bom_summary()
-    side = "single-sided top (F.Cu) assembly" if s["sides"] == {"F"} else f"sides {sorted(s['sides'])}"
+    bottom = bs.bottom_side_refs()
+    side = ("single-sided top (F.Cu) assembly" if s["sides"] == {"F"} else
+            f"double-sided assembly: {s['placements'] - len(bottom)} top + {len(bottom)} bottom "
+            f"(0402 decoupling under U1: {', '.join(bottom)})")
 
     def cells(r):
         return [esc(c) for c in r]
@@ -1267,7 +1271,10 @@ def _pcbway_notes(s: dict) -> list[str]:
 
 
 def side_text(s: dict) -> str:
-    return "single-sided, top side only" if s["sides"] == {"F"} else f"sides {sorted(s['sides'])}"
+    bottom = bs.bottom_side_refs()
+    return ("single-sided, top side only" if s["sides"] == {"F"} else
+            f"double-sided: {len(bottom)} x 0402 on the bottom ({', '.join(bottom)}), "
+            f"all other parts on top; one extra stencil + reflow pass")
 
 
 # ===========================================================================
@@ -1304,7 +1311,7 @@ def thermal_model() -> dict:
     r_bd_nat = 1 / (H_NAT * a_board * BOARD_SPREAD_EFF)
     r_bd_fan = 1 / ((H_NAT + H_BOARD_EXHAUST) / 2 * a_board * BOARD_SPREAD_EFF)
     r_bot_common = THETA_JC_BOT + r_solder + r_arr
-    r_gap = (GAP_PAD_MM * 1e-3) / (K_GAP_PAD * SPREADER_MM ** 2 * 1e-6)
+    r_gap = (GAP_PAD_MM * 1e-3) / (K_GAP_PAD * WINDOW_MM ** 2 * 1e-6)
     r_top_bare = THETA_JC_TOP + 1 / (H_NAT * body * 1e-6)
     scen = []
     for name, r_top, r_bot in (
@@ -1375,7 +1382,8 @@ def _thermal_section() -> list[str]:
               f"{f(gap_act + tm['tim_mm'], 2)} mm with the uncompressed TIM"],
              ["(b) Bottom", f"EPAD {f(p4.EPAD_SIZE_MM, 1)} mm -> {tv['grid']}x{tv['grid']} vias "
                             f"{f(tv['drill_mm'], 2)}/{f(tv['pad_mm'], 2)} mm @ {f(tv['pitch_mm'], 1)} mm (VIPPO) -> "
-                            f"L2 GND plane + {f(SPREADER_MM, 0)} x {f(SPREADER_MM, 0)} mm exposed B.Cu spreader -> "
+                            f"L2 GND plane + {f(SPREADER_MM, 0)} x {f(SPREADER_MM, 0)} mm B.Cu spreader "
+                            f"({f(WINDOW_MM, 1)} x {f(WINDOW_MM, 1)} mm exposed window) -> "
                             "optional bottom gap pad / chassis",
               f"array extent {f(extent, 1)} mm inside the {f(p4.EPAD_SIZE_MM, 1)} mm EPAD; fill: {esc(tv['fill'])}"],
          ]), "",
@@ -1383,9 +1391,12 @@ def _thermal_section() -> list[str]:
          f"is taller than {f(h_max, 2)} mm, so the base clears every 0402 by >= {f(gap_act, 2)} mm. Black "
          "anodising is not a guaranteed insulator -- the gap is the insulation, and the 4-point spring "
          "clamp keeps the base parallel to the board.", "",
-         f"The {f(SPREADER_MM, 0)} x {f(SPREADER_MM, 0)} mm B.Cu spreader size is a TASK 2 assumption "
-         "(`SPREADER_MM` in tools/gen_docs.py); it is not yet a constant in board_spec -- PENDING until the "
-         "placer/router owns it.", "",
+         f"Assembly is double-sided: {len(bs.bottom_side_refs())} decoupling caps "
+         f"({', '.join(bs.bottom_side_refs())}) sit on the bottom under the SoC's right-hand pad ring, "
+         "outside the thermal-via field. So only the via field is left mask-free "
+         f"({f(WINDOW_MM, 1)} x {f(WINDOW_MM, 1)} mm, `BOTTOM_THERMAL_WINDOW_MM`); the rest of the "
+         f"{f(SPREADER_MM, 0)} x {f(SPREADER_MM, 0)} mm spreader copper (`BOTTOM_SPREADER_MM`) is under solder "
+         "mask. A bottom gap pad or bracket must clear those 0402s (<= 0.55 mm) or be cut to the window.", "",
          "### 1.1 Via-array thermal resistance", "",
          "```text",
          f"barrel area  A = pi/4 * (d^2 - (d - 2t)^2) = pi/4 * ({f(tm['d'], 3)}^2 - {f(tm['d'] - 2 * tm['t'], 3)}^2)"
@@ -1431,7 +1442,7 @@ def _thermal_section() -> list[str]:
               f"2 x board area, {BOARD_SPREAD_EFF:.0%} effective, top h = {f(H_BOARD_EXHAUST, 0)}"],
              ["Board -> air, natural", f"{f(tm['r_bd_nat'], 1)} K/W", f"h = {f(H_NAT, 0)} W/m^2.K"],
              ["Optional gap pad to chassis", f"{f(tm['r_gap'], 2)} K/W + chassis",
-              f"{f(GAP_PAD_MM, 1)} mm, {f(K_GAP_PAD, 1)} W/m.K on the {f(SPREADER_MM, 0)} mm spreader"],
+              f"{f(GAP_PAD_MM, 1)} mm, {f(K_GAP_PAD, 1)} W/m.K on the {f(WINDOW_MM, 1)} mm exposed window"],
          ], "lrl"), "",
          md_table(["Scenario", "R top (K/W)", "R bottom (K/W)", "R j-a (K/W)", "Share via EPAD",
                    f"dT j-a @ {f(tm['p_hi'], 2)} W", f"dT j-a @ {f(P_DESIGN_W, 1)} W",
