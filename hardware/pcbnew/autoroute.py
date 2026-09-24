@@ -69,7 +69,7 @@ SOC_POWER_WIDTH_UM = 250
 SOC_POWER_VIA = "Via[0-3]_450:200_um"
 
 U1_STUB_WIDTH_MM = 0.10
-U1_STUB_INSIDE_COURTYARD_MM = 0.10     # the SoC-ring 0402 pads start ~0.2 mm past it
+
 
 
 def nm(mm: float) -> int:
@@ -107,9 +107,7 @@ def u1_stubs(board) -> list:
     """Short tracks from every connected U1 pad out to just inside the courtyard."""
     u1 = footprint(board, "U1")
     ox, oy = origin_of(board)
-    court = u1.GetCourtyard(pcbnew.F_CrtYd).BBox()
-    half = max(court.GetWidth(), court.GetHeight()) // 2
-    reach = half - nm(U1_STUB_INSIDE_COURTYARD_MM)
+    reach = nm(lp.U1_STUB_END_MM)       # the planner keeps the escape channels open from here
     stubs = []
     for pad in u1.Pads():
         net = pad.GetNet()

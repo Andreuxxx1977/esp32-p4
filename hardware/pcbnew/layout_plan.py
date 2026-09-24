@@ -40,20 +40,16 @@ Placement policy, in order (every decision is logged in ``Plan.log``):
    with an already placed part, a hole keep-out or the heatsink keep-out is
    moved to the nearest legal position and reported as a *spec conflict*
    (board_spec.py is never modified).
-3. **SoC ring** (``Near("U1", pad, max_mm)`` 0402 passives): solved as an
-   optimal assignment (Hungarian algorithm) of parts to fixed, mutually
-   non-overlapping radial slots -- one row on F.Cu in the ring outside the
-   U1 courtyard, and (if ``allow_bottom``) two rows on B.Cu directly under
-   the pad ring, outside the thermal-via field. Top-side slots are always
-   preferred; the bottom side is used only for what does not fit on top.
-4. **Near** (everything else): deterministic greedy search on a 0.1 mm grid,
-   most constrained parts first, anchors before dependants. Tiers: top side
-   within ``max_mm``; bottom side within ``max_mm`` (0402/0603 passives only);
-   then the radius is widened step by step and a WARNING is logged -- never a
-   silent violation. A repair loop (:func:`build_plan`) re-runs the plan with
-   failed parts promoted and their ideal spot reserved against movable
-   absolute parts.
-5. **Silkscreen**: J9 pin legend (before step 4, so parts avoid it), every
+3. **Near** (the SoC ring and everything else): deterministic greedy search on
+   a 0.1 mm grid, most constrained parts first (for equal distance limits,
+   high-frequency decoupling first), anchors before dependants, on the side the
+   spec declares (``Near.side``). Top-side positions near U1 must keep every U1
+   pad's straight *escape channel* routable (section 5b) and a U1 part must sit
+   in line with its own pad. Then the radius is widened step by step and a
+   WARNING is logged -- never a silent violation. A repair loop
+   (:func:`build_plan`) re-runs the plan with failed parts promoted and their
+   ideal spot reserved against movable absolute parts.
+4. **Silkscreen**: J9 pin legend (before step 3, so parts avoid it), every
    reference designator on a pad-free spot or on Fab, the licence line last.
 
 Distances for ``Near`` are "pad-to-pad": from the target pad centre to the
@@ -531,7 +527,7 @@ class Placement:
     y: float
     rot: float
     side: str = "F"
-    method: str = ""                 # fixed | absolute | edge | fiducial | ring-F | ring-B | near
+    method: str = ""                 # fixed | absolute | edge | fiducial | near | near-B
     spec_xy: tuple | None = None     # coordinates requested by the spec (Place only)
     target: str | None = None        # "U1.26" for Near parts
     max_mm: float | None = None
@@ -859,6 +855,203 @@ def mating_face(geom: FootprintGeom, direction: str) -> tuple[float, str]:
 
 
 # ==========================================================================
+# 5b. SoC escape channels
+# ==========================================================================
+#
+# U1's pads are 0.20 mm wide on a 0.35 mm pitch. Inside its courtyard the custom rule
+# "u1_fanout_*" allows 0.09 mm, and the router gets a locked 0.10 mm stub per pad out to
+# U1_STUB_END_MM (hardware/pcbnew/autoroute.py). From there every pad continues as a straight
+# radial track on the same 0.35 mm pitch, which meets every net class (0.15 mm + 0.20 mm
+# gap). Those tracks are the pad's *escape channel*. A top-side pad of another net inside
+# a channel would block it, so the planner only accepts top-side placements near the SoC
+# for which all channels still fit: per side and radial band, the channels (in pad order,
+# each at most ESCAPE_JOG_MAX_MM off its pad line, further only as far as the radial run
+# before the band allows at 45 degrees) must pack between the other nets' pads at netclass
+# width + clearance. Pads of a channel's own nets (the pad's net and nets it continues into
+# through series resistors) are passed through, not around. A decoupled supply pad's channel
+# ends at its first shunt part (the cap); the rail goes on through the planes.
+
+U1_STUB_END_MM = U1_COURTYARD_HALF_MM - 0.10   # the autorouter's locked U1 stubs end here
+ESCAPE_REACH_MM = 12.0            # channels are kept free this far out (square half-size)
+ESCAPE_JOG_MAX_MM = 1.0
+ESCAPE_ALIGN_WEIGHT = 1.0         # search score per mm of sideways offset from the target pad
+# Track width / clearance per net class for the channel model (the router's values).
+ESCAPE_TRACKS = {"Default": (0.15, 0.10), "SE_50": (0.16, 0.15), "USB_90": (0.15, 0.20),
+                 "MIPI_100": (0.135, 0.20), "ETH_100": (0.135, 0.20), "POWER": (0.20, 0.15)}
+
+
+@dataclass(frozen=True)
+class Channel:
+    pad: str
+    net: str
+    side: str            # left | right | top | bottom (of U1)
+    t: float             # coordinate along the side (y for left/right, x for top/bottom)
+    width: float
+    clearance: float
+    owners: frozenset    # nets allowed inside the channel
+    decoupled: bool      # supply pad: the channel ends at its first shunt part
+
+
+@dataclass(frozen=True)
+class Obstacle:
+    side: str
+    t0: float
+    t1: float
+    r0: float
+    r1: float
+    net: str
+    shunt: bool          # pad of a part that has a GND pad (decoupling / filter cap)
+    ref: str = ""
+
+
+def polar(x: float, y: float) -> tuple[str, float, float]:
+    """(side, t, r) of a point relative to U1: side by the larger coordinate."""
+    if abs(x) >= abs(y):
+        return ("left" if x < 0 else "right"), y, abs(x)
+    return ("top" if y < 0 else "bottom"), x, abs(y)
+
+
+def rect_polar(r: Rect) -> tuple[str, float, float, float, float]:
+    """(side, t0, t1, r0, r1) of a pad rectangle, side from its centre."""
+    side, _, _ = polar((r[0] + r[2]) / 2, (r[1] + r[3]) / 2)
+    if side in ("left", "right"):
+        rs = sorted((abs(r[0]), abs(r[2]))) if r[0] * r[2] > 0 else (0.0, max(abs(r[0]), abs(r[2])))
+        return side, r[1], r[3], rs[0], rs[1]
+    rs = sorted((abs(r[1]), abs(r[3]))) if r[1] * r[3] > 0 else (0.0, max(abs(r[1]), abs(r[3])))
+    return side, r[0], r[2], rs[0], rs[1]
+
+
+def series_links() -> dict[str, set[str]]:
+    """Net -> nets it continues into through a 2-pad resistor (0R/22R series parts),
+    excluding supplies and GND (pull-ups and rail links are not in-line)."""
+    def signal(n: str) -> bool:
+        return bool(n) and n != bs.GND and not n.startswith(("+", "VDD", "VSYS", "VBUS"))
+    links: dict[str, set[str]] = {}
+    for c in bs.COMPONENTS:
+        nets = list(c.conns.values())
+        if c.part.kind == "res" and len(c.part.pins) == 2 and len(nets) == 2 and all(map(signal, nets)):
+            a, b = nets
+            links.setdefault(a, set()).add(b)
+            links.setdefault(b, set()).add(a)
+    return links
+
+
+def decoupled_nets() -> set[str]:
+    """Supply nets with a shunt cap next to U1 (their pads end their channel at the cap)."""
+    out = set()
+    for c in bs.COMPONENTS:
+        if isinstance(c.place, bs.Near) and c.place.ref == "U1" and c.part.kind == "cap" \
+                and bs.GND in c.conns.values():
+            out |= {n for n in c.conns.values() if n.startswith(("+", "VDD"))}
+    return out
+
+
+def escape_channels() -> dict[str, list[Channel]]:
+    u1 = next(c for c in bs.COMPONENTS if c.ref == "U1")
+    links, dec = series_links(), decoupled_nets()
+    out: dict[str, list[Channel]] = {s: [] for s in ("left", "right", "top", "bottom")}
+    for pad, net in u1.conns.items():
+        if not net or net == bs.GND or not pad.isdigit() or int(pad) > 104:
+            continue
+        x, y = p4.pad_position(int(pad))
+        side = p4.pad_side(int(pad))
+        w, c = ESCAPE_TRACKS.get(bs.netclass_of(net), ESCAPE_TRACKS["Default"])
+        owners = {net}
+        todo = [net]
+        while todo:                                  # whole series chain (A - R - B - R - C)
+            for m in links.get(todo.pop(), ()):
+                if m not in owners:
+                    owners.add(m)
+                    todo.append(m)
+        out[side].append(Channel(pad, net, side, y if side in ("left", "right") else x, w, c,
+                                 frozenset(owners), net in dec))
+    for chans in out.values():
+        chans.sort(key=lambda ch: ch.t)
+    return out
+
+
+class EscapeModel:
+    """Placed top-side pads near U1 versus the U1 escape channels (see above)."""
+
+    def __init__(self):
+        self.channels = escape_channels()
+        self.placed: dict[str, list[Obstacle]] = {s: [] for s in self.channels}
+
+    @staticmethod
+    def in_zone(r: Rect) -> bool:
+        k = ESCAPE_REACH_MM
+        return r[0] < k and r[2] > -k and r[1] < k and r[3] > -k
+
+    def obstacles(self, pl: "Placement", nets_by_pad: dict[str, str], shunt: bool) -> list[Obstacle]:
+        out = []
+        for p, shape in zip(pl.geom.copper_pads(), pl.pad_shapes()):
+            if not self.in_zone(shape.rect):
+                continue
+            side, t0, t1, r0, r1 = rect_polar(shape.rect)
+            if r1 <= U1_STUB_END_MM:
+                continue
+            out.append(Obstacle(side, t0, t1, r0, r1, nets_by_pad.get(p.number, ""), shunt, pl.ref))
+        return out
+
+    def add(self, obstacles: list[Obstacle]) -> None:
+        for o in obstacles:
+            self.placed[o.side].append(o)
+
+    def _end(self, ch: Channel, obs: list[Obstacle]) -> float:
+        """Radius where the channel ends: its first own shunt part for a supply pad."""
+        if not ch.decoupled:
+            return ESCAPE_REACH_MM
+        ends = [o.r1 for o in obs if o.shunt and o.net in ch.owners
+                and o.t0 - ESCAPE_JOG_MAX_MM <= ch.t <= o.t1 + ESCAPE_JOG_MAX_MM]
+        return min(ends, default=ESCAPE_REACH_MM)
+
+    @staticmethod
+    def _jog(r0: float) -> float:
+        return max(0.0, min(ESCAPE_JOG_MAX_MM, r0 - U1_STUB_END_MM - 0.05))
+
+    def _band(self, o: Obstacle, obs: list[Obstacle]) -> str | None:
+        """Do the channels passing the radial band of ``o`` pack between ``obs``?"""
+        lo, hi = o.r0 - 0.05, o.r1 + 0.05
+        band = [q for q in obs if q.r1 > lo and q.r0 < hi]
+        chans = [ch for ch in self.channels[o.side] if self._end(ch, obs) > lo]
+        jog = self._jog(o.r0)
+        x_prev, ch_prev = None, None
+        for ch in chans:
+            x = ch.t - jog
+            if ch_prev is not None:
+                x = max(x, x_prev + (ch_prev.width + ch.width) / 2
+                        + max(ch_prev.clearance, ch.clearance))
+            keep = ch.width / 2 + ch.clearance
+            forbid = sorted((q.t0 - keep, q.t1 + keep) for q in band if q.net not in ch.owners)
+            for a, b in forbid:
+                if a < x < b - EPS:
+                    x = b
+            if x > ch.t + jog + EPS:
+                return f"blocks the escape channel of U1.{ch.pad} ({ch.net})"
+            x_prev, ch_prev = x, ch
+        return None
+
+    def blocked(self, new: list[Obstacle]) -> str | None:
+        """None if every channel still fits with ``new`` added, else which one does not.
+        The bands of placed pads that ``new`` overlaps are re-checked too, so the final
+        layout passes :meth:`violations` whatever the placement order."""
+        for o in new:
+            obs = self.placed[o.side] + [q for q in new if q.side == o.side]
+            bands = [o] + [q for q in self.placed[o.side]
+                           if q.r1 > o.r0 - 0.05 and q.r0 < o.r1 + 0.05]
+            for b in bands:
+                why = self._band(b, obs)
+                if why:
+                    return why
+        return None
+
+    def violations(self) -> list[str]:
+        """Re-check every placed obstacle (for tests and the report)."""
+        return [f"{o.ref}: {why}" for obs in self.placed.values() for o in obs
+                if (why := self._band(o, obs))]
+
+
+# ==========================================================================
 # 6. The planner
 # ==========================================================================
 
@@ -891,6 +1084,7 @@ class Planner:
         self.via_field_half = half
         self.bside_forbidden = (-(half + BSIDE_MARGIN_MM), -(half + BSIDE_MARGIN_MM),
                                 half + BSIDE_MARGIN_MM, half + BSIDE_MARGIN_MM)
+        self.escape = EscapeModel()
 
     # ------------------------------------------------------------ helpers
     def geom_of(self, comp: bs.Component) -> FootprintGeom:
@@ -931,7 +1125,19 @@ class Planner:
             return "on the bottom-side thermal-via field / thermal-pad window"
         if not self._inside_outline(shape, cand.faces):
             return "outside the board outline"
+        if (cand.side == "F" or cand_tht) and cand.ref != "U1" and self.escape.in_zone(shape.rect):
+            why = self.escape.blocked(self._escape_obstacles(cand))
+            if why:
+                return why
         return None
+
+    def _escape_obstacles(self, pl: Placement) -> list[Obstacle]:
+        comp = self.comps.get(pl.ref)
+        mapping = self.plan.pad_maps.get(pl.ref, {})
+        nets = {fp: net for spec, net in (comp.conns.items() if comp else ())
+                for fp in mapping.get(spec, (spec,))}
+        shunt = bool(comp and len(comp.part.pins) == 2 and bs.GND in comp.conns.values())
+        return self.escape.obstacles(pl, nets, shunt)
 
     _CELL = 4.0
 
@@ -978,6 +1184,8 @@ class Planner:
         self.plan.placements[pl.ref] = pl
         shape = pl.shape()
         self._shapes[pl.ref] = shape
+        if (pl.side == "F" or pl.tht) and pl.ref != "U1" and self.escape.in_zone(shape.rect):
+            self.escape.add(self._escape_obstacles(pl))
         for cell in self._cells(shape.rect):
             self._grid.setdefault(cell, []).append(pl.ref)
         return pl
@@ -1094,35 +1302,6 @@ class Planner:
                 self._nudge(pl, why)
             self.add(pl)
 
-    # ------------------------------------------------------------ 6.4 SoC ring
-    def ring_slots(self, env_len: float, env_wid: float) -> list[tuple]:
-        """Radial slots around U1: (side, x, y, axis, row). axis = long-axis direction."""
-        g = COURTYARD_GAP_MM
-        pitch = env_wid + g
-        slots = []
-
-        def square_ring(inner: float, side: str, row: str) -> None:
-            centre = inner + env_len / 2
-            span_tb = inner + env_len            # top/bottom rows also cover the corners
-            span_lr = inner - g                  # left/right rows stop at the corner squares
-            n_tb = int((2 * span_tb + g) / pitch + EPS)
-            n_lr = int((2 * span_lr + g) / pitch + EPS)
-            for i in range(n_tb):
-                t = round((i - (n_tb - 1) / 2) * pitch, 4)
-                slots.append((side, t, -centre, "y", row))
-                slots.append((side, t, centre, "y", row))
-            for i in range(n_lr):
-                t = round((i - (n_lr - 1) / 2) * pitch, 4)
-                slots.append((side, -centre, t, "x", row))
-                slots.append((side, centre, t, "x", row))
-
-        square_ring(U1_COURTYARD_HALF_MM + g, "F", "F")
-        if self.plan.allow_bottom:
-            inner_a = self.bside_forbidden[2]
-            square_ring(inner_a, "B", "B1")
-            square_ring(inner_a + env_len + g, "B", "B2")
-        return slots
-
     def _target_points(self, near: bs.Near, comp: bs.Component) -> tuple[list, set]:
         """Target pad centres and their nets for a Near placement."""
         anchor = self.plan.placements[near.ref]
@@ -1160,84 +1339,7 @@ class Planner:
             return 1.5 if farads <= 100e-9 else 1.0
         return 0.8
 
-    def _orient_in_slot(self, comp, geom, slot, targets, nets):
-        side, sx, sy, axis, _ = slot
-        rots = (90.0, 270.0) if axis == "y" else (0.0, 180.0)
-        mapping = self.plan.pad_maps[comp.ref]
-        same = {fp for spec, net in comp.conns.items() if net in nets for fp in mapping.get(spec, ())}
-        best = None
-        for rot in rots:
-            pl = Placement(comp.ref, geom.lib_id, geom, sx, sy, rot, side)
-            pads = pl.pad_positions()
-            d_any = min(math.hypot(px - tx, py - ty) for _, px, py in pads for tx, ty in targets)
-            d_same = min((math.hypot(px - tx, py - ty) for n, px, py in pads if n in same
-                          for tx, ty in targets), default=d_any)
-            key = (round(d_same, 6), round(d_any, 6), rot)
-            if best is None or key < best[0]:
-                best = (key, rot, d_any)
-        return best[1], best[2]
-
-    def place_soc_ring(self) -> None:
-        self.use_reservations = False     # reservations only steer absolute parts and fiducials
-        ring = [c for c in bs.COMPONENTS if isinstance(c.place, bs.Near) and c.place.ref == "U1"
-                and bs.is_keepout_exempt(c)]
-        if not ring:
-            return
-        geoms = {c.ref: self.geom_of(c) for c in ring}
-        env_len = max(g.courtyard[2] - g.courtyard[0] for g in geoms.values())
-        env_wid = max(g.courtyard[3] - g.courtyard[1] for g in geoms.values())
-        slots = self.ring_slots(env_len, env_wid)
-        big = 1e6
-        cost, choice, info = [], {}, {}
-        for i, comp in enumerate(ring):
-            targets, nets = self._target_points(comp.place, comp)
-            info[comp.ref] = (targets, nets)
-            w = self._weight(comp)
-            row = []
-            for j, slot in enumerate(slots):
-                rot, d = self._orient_in_slot(comp, geoms[comp.ref], slot, targets, nets)
-                choice[(i, j)] = (rot, d)
-                if slot[0] != self.side_of(comp):
-                    # every part is assembled on the side the spec declares (Near.side)
-                    row.append(big * 2.0)
-                elif d <= comp.place.max_mm + EPS:
-                    row.append(w * d + (1000.0 if slot[0] == "B" else 0.0))
-                else:
-                    row.append(big)
-            cost.append(row)
-        # Always offer a "no slot" column per part. A relaxed series/bias part (> 2 mm
-        # allowed) can take it cheaply and is then placed by the search in the outer
-        # ring on top, so it never pushes a <= 2 mm decoupling cap to the bottom side
-        # (a B.Cu slot costs +1000). Tight caps pay dearly for "no slot", HF caps most.
-        for comp, row in zip(ring, cost):
-            no_slot = (100.0 if comp.place.max_mm > 2.0 + EPS
-                       else big * (4.0 if self._weight(comp) > 1.0 else 3.0))
-            row.extend([no_slot] * len(ring))
-        assign = hungarian(cost)
-        unplaced = []
-        for i, comp in enumerate(ring):
-            j = assign[i]
-            if j < 0 or j >= len(slots) or cost[i][j] >= big:
-                unplaced.append(comp)
-                continue
-            side, sx, sy, _, row = slots[j]
-            rot, d = choice[(i, j)]
-            pl = Placement(comp.ref, geoms[comp.ref].lib_id, geoms[comp.ref], sx, sy, rot, side,
-                           f"ring-{row}", target=f"U1.{comp.place.pad}", max_mm=comp.place.max_mm,
-                           dist_mm=round(d, 3))
-            why = self.legal(pl)
-            if why:  # slots are built legal; anything else is a bug worth seeing
-                self.plan.warn(f"{comp.ref}: ring slot illegal ({why}); re-placing by search")
-                unplaced.append(comp)
-                continue
-            self.add(pl)
-        n_b = sum(1 for p in self.plan.placements.values() if p.method.startswith("ring-B"))
-        self.plan.log.append(f"SoC ring: {len(ring) - len(unplaced)} of {len(ring)} parts in "
-                             f"{len(slots)} slots ({n_b} on B.Cu)")
-        for comp in unplaced:
-            self._place_near(comp)
-
-    # ------------------------------------------------------------ 6.5 greedy Near
+    # ------------------------------------------------------------ 6.4 Near (incl. the SoC ring)
     def place_near_all(self) -> None:
         pending = [c for c in bs.COMPONENTS if isinstance(c.place, bs.Near)
                    and c.ref not in self.plan.placements]
@@ -1246,7 +1348,8 @@ class Planner:
             if not ready:
                 raise RuntimeError(f"Near anchors never placed: {[c.ref for c in pending]}")
             ready.sort(key=lambda c: ((0, self.promoted.index(c.ref)) if c.ref in self.promoted
-                                      else (1, c.place.max_mm), self.order[c.ref]))
+                                      else (1, c.place.max_mm), -self._weight(c),
+                                      self.order[c.ref]))
             for comp in ready:
                 self._place_near(comp)
             pending = [c for c in pending if c.ref not in self.plan.placements]
@@ -1321,6 +1424,7 @@ class Planner:
             obstacles += self._silk_boxes
         inv = 1.0 / step
         disc = self._int_disc(radius, step)
+        align = anchor.ref == "U1"
         best: dict[tuple, float] = {}
         local_by_rot = {}
         for rot in (0.0, 90.0, 180.0, 270.0):
@@ -1335,9 +1439,13 @@ class Planner:
                         if (gx - qx) * (tx - anchor.x) + (gy - qy) * (ty - anchor.y) < -EPS:
                             penalty = 0.25
                     bx, by = round((tx - qx) * inv), round((ty - qy) * inv)
+                    # Near U1: stay in line with the target pad (inside its own escape
+                    # channel) rather than drift in front of a neighbouring pad.
+                    along_y = align and polar(tx, ty)[0] in ("left", "right")
                     for i, j, r in disc:
                         key = (rot, bx + i, by + j)
-                        score = r + penalty
+                        score = r + penalty + (ESCAPE_ALIGN_WEIGHT * abs(j if along_y else i) * step
+                                               if align else 0.0)
                         if score < best.get(key, 1e9):
                             best[key] = score
         order = sorted(best.items(), key=lambda kv: (round(kv[1], 6), kv[0][0], kv[0][2], kv[0][1]))
@@ -1351,10 +1459,28 @@ class Planner:
                       for i in q_idx for tx, ty in targets)
             if d_q > radius + EPS:
                 continue
+            if align and side == "F" and not self._in_channel(
+                    [(cx + local[i][0], cy + local[i][1]) for i in q_idx], targets):
+                continue
             pl = Placement(comp.ref, geom.lib_id, geom, cx, cy, rot, side)
             if not self.legal(pl, ignore, shape):
                 return pl
         return None
+
+    @staticmethod
+    def _in_channel(pads: list[tuple[float, float]], targets: list[tuple[float, float]]) -> bool:
+        """A top-side part of a U1 pad must be reachable along that pad's escape channel:
+        a same-net pad on the same side of U1, at most the channel's jog off the pad line
+        (plus the pad's own half-width). Outside the escape zone anything goes."""
+        for px, py in pads:
+            side, t, r = polar(px, py)
+            if r > ESCAPE_REACH_MM:
+                return True
+            for tx, ty in targets:
+                tside, tt, _ = polar(tx, ty)
+                if side == tside and abs(t - tt) <= EscapeModel._jog(r - 0.28) + 0.2 + EPS:
+                    return True
+        return False
 
     def ideal_spot(self, ref: str) -> Shape | None:
         """Best spot for a failed Near part if movable parts were out of the way.
@@ -1379,7 +1505,7 @@ class Planner:
         self.use_reservations = saved
         return pl.shape() if pl else None
 
-    # ------------------------------------------------------------ 6.6 silkscreen
+    # ------------------------------------------------------------ 6.5 silkscreen
     def place_header_legends(self) -> None:
         """Pin labels next to a header, laid out like the header itself.
 
@@ -1556,7 +1682,7 @@ class Planner:
                 return False
         return not any(box.overlaps_rect(s.bbox) for s in self.plan.silk)
 
-    # ------------------------------------------------------------ 6.7 the rest
+    # ------------------------------------------------------------ 6.6 the rest
     def build_vias(self) -> None:
         tv = bs.THERMAL_VIA
         n, pitch = tv["grid"], tv["pitch_mm"]
@@ -1643,7 +1769,7 @@ class Planner:
         self.place_absolute()
         self.place_fiducials()
         self.place_header_legends()
-        self.place_soc_ring()
+        # (SoC ring parts are placed by the Near search, under the escape-channel rule)
         self.place_near_all()
         self.place_references()
         self.place_license_text()
@@ -1655,7 +1781,7 @@ class Planner:
 
 
 # ==========================================================================
-# 7. Small geometry builders + assignment solver
+# 7. Small geometry builders
 # ==========================================================================
 
 def square(half: float) -> tuple[tuple[float, float], ...]:
@@ -1694,49 +1820,6 @@ def rounded_rect_outline(r: Rect, radius: float) -> list[Graphic]:
     for a in arcs:
         g.append(Graphic("arc", "Edge.Cuts", tuple((round(px, 4), round(py, 4)) for px, py in a), 0.1))
     return g
-
-
-def hungarian(cost: list[list[float]]) -> list[int]:
-    """Minimum-cost assignment of n rows to m >= n columns (O(n^2 m))."""
-    n, m = len(cost), len(cost[0])
-    assert n <= m
-    inf = float("inf")
-    u, v = [0.0] * (n + 1), [0.0] * (m + 1)
-    p, way = [0] * (m + 1), [0] * (m + 1)
-    for i in range(1, n + 1):
-        p[0], j0 = i, 0
-        minv, used = [inf] * (m + 1), [False] * (m + 1)
-        while True:
-            used[j0] = True
-            i0, delta, j1 = p[j0], inf, 0
-            row = cost[i0 - 1]
-            for j in range(1, m + 1):
-                if not used[j]:
-                    cur = row[j - 1] - u[i0] - v[j]
-                    if cur < minv[j]:
-                        minv[j], way[j] = cur, j0
-                    if minv[j] < delta:
-                        delta, j1 = minv[j], j
-            for j in range(m + 1):
-                if used[j]:
-                    u[p[j]] += delta
-                    v[j] -= delta
-                else:
-                    minv[j] -= delta
-            j0 = j1
-            if p[j0] == 0:
-                break
-        while True:
-            j1 = way[j0]
-            p[j0] = p[j1]
-            j0 = j1
-            if j0 == 0:
-                break
-    assign = [-1] * n
-    for j in range(1, m + 1):
-        if p[j]:
-            assign[p[j] - 1] = j - 1
-    return assign
 
 
 # ==========================================================================

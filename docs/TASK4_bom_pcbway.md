@@ -4,7 +4,7 @@
 
 Generated from `board_spec.bom_lines()`; the CSV `hardware/output/bom_pcbway.csv` holds exactly the rows of the two tables below (same columns, same order).
 
-**Summary:** 63 unique fitted line items, 219 placements (215 SMD on 59 lines, 4 THT on 4 lines: J4, J6, J7, J9), double-sided assembly: 211 top + 8 bottom (0402 decoupling under U1: C20, C21, C23, C26, C28, C29, C31, C33). SMD parts with THT shell/retention legs: J1, J2, J3. DNP: 4 footprints on 3 lines (C77, C85, R10, R88). Excluded (mechanical, no part to buy): H1, H2, H3, H4, H5, H6, H7, H8. Check: BOM placements 219 == fitted non-mechanical components 219 -> OK.
+**Summary:** 63 unique fitted line items, 219 placements (215 SMD on 59 lines, 4 THT on 4 lines: J4, J6, J7, J9), double-sided assembly: 204 top + 15 bottom (0402 decoupling under U1: C10, C11, C13, C14, C20, C21, C23, C25, C26, C27, C28, C29, C31, C32, C33). SMD parts with THT shell/retention legs: J1, J2, J3. DNP: 4 footprints on 3 lines (C77, C85, R10, R88). Excluded (mechanical, no part to buy): H1, H2, H3, H4, H5, H6, H7, H8. Check: BOM placements 219 == fitted non-mechanical components 219 -> OK.
 
 ## 1. Fitted parts
 
@@ -107,7 +107,7 @@ Lines without an LCSC number (PCBWay sources by MPN): C43, C44; J6; J9; R4, R5; 
 | Min track / space | 3.5 / 3.5 mil (0.089 mm) |
 | Microvia | 0.1 mm laser-drilled (L1-L2, L4-L3), in the 1080 prepreg |
 | Hole plating | >= 25 um average (assumed by the thermal-via calculation in TASK 2) |
-| Assembly | double-sided: 8 x 0402 on the bottom (C20, C21, C23, C26, C28, C29, C31, C33), all other parts on top; one extra stencil + reflow pass; 215 SMD + 4 THT placements; finest pitch 0.35 mm (U1); fiducials FID1 (-52.1, 31.4), FID2 (52.0, 28.0), FID3 (47.0, -24.0) |
+| Assembly | double-sided: 15 x 0402 on the bottom (C10, C11, C13, C14, C20, C21, C23, C25, C26, C27, C28, C29, C31, C32, C33), all other parts on top; one extra stencil + reflow pass; 215 SMD + 4 THT placements; finest pitch 0.35 mm (U1); fiducials FID1 (-52.1, 31.4), FID2 (52.0, 28.0), FID3 (47.0, -24.0) |
 | DNP | C77, C85, R10, R88 |
 
 Stack-up to attach to the order:

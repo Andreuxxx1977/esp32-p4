@@ -646,26 +646,40 @@ SOC_DECOUPLING: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("101", "+3V3", ("10nF", "100nF")),          # VDD_ANA
     ("102", "VDD_BAT", ("100nF", "10uF")),       # VDD_BAT
 )
-# The right-hand edge of the SoC (pads 54-77) carries 19 decoupling caps for ~9 mm
-# of package edge: more than one 0402 row can hold within 2 mm. These 8 go on the
-# bottom side, directly under the pad ring (outside the thermal-via field), which is
+# On top, every one of U1's 100 connected pads keeps a straight escape channel (layout_plan
+# "SoC escape channels"), so a cap can only sit in line with its own pad. Where a pad has
+# more caps than that, or its neighbours' channels leave no room (the run of supply pads
+# 71-77, the VDD_MIPI_PHY / VDD_USBPHY pads between the MIPI and USB pairs), the caps go on
+# the bottom side, directly under the pad ring (outside the thermal-via field), which is
 # also the lowest-inductance spot. Decision: double-sided assembly (owner, 2026-09-24).
 BOTTOM_DECOUPLING: frozenset[tuple[str, str]] = frozenset({
-    ("62", "1uF"), ("67", "100nF"), ("71", "1uF"), ("74", "1uF"),
-    ("75", "10uF"), ("76", "100nF"), ("76", "10uF"), ("77", "10uF"),
+    ("41", "100nF"), ("41", "1uF"), ("51", "100nF"), ("51", "4.7uF"),
+    ("62", "1uF"), ("67", "100nF"), ("71", "1uF"), ("73", "1uF"), ("74", "1uF"),
+    ("75", "100nF"), ("75", "10uF"), ("76", "100nF"), ("76", "10uF"),
+    ("77", "100nF"), ("77", "10uF"),
 })
+# The first cap of each pad (its high-frequency one, or an LDO output's only cap) sits
+# within SOC_DECAP_MAX_MM, in line with the pad. The others are bulk and may sit up to
+# SOC_BULK_MAX_MM away: a pad's 0.35 mm-pitch neighbours need their straight escape tracks
+# past it (see layout_plan "SoC escape channels"), so there is one in-line spot per pad.
+SOC_DECAP_MAX_MM = 2.1
+SOC_BULK_MAX_MM = 4.0
 for _pad, _net, _vals in SOC_DECOUPLING:
-    for _v in _vals:
+    for _i, _v in enumerate(_vals):
         _side = "B" if (_pad, _v) in BOTTOM_DECOUPLING else "F"
-        C(_v, _net, GND, "SoC decoupling", place=Near("U1", _pad, 2.0, side=_side),
+        C(_v, _net, GND, "SoC decoupling",
+          place=Near("U1", _pad, SOC_DECAP_MAX_MM if _i == 0 else SOC_BULK_MAX_MM, side=_side),
           note=f"U1 pad {_pad} {p4.PAD_NAME[_pad]}" + (" (bottom side)" if _side == "B" else ""))
 
-# Only the decoupling caps above must sit within 2 mm of their pad. The series /
-# bias / strap parts below just need to be "close to the chip" (Espressif): they
-# stay 0402 inside the heatsink keep-out but may use the second ring (<= 6 mm),
-# which leaves the 52 inner top-side slots to the caps -> single-sided assembly.
-SOC_SUPPORT_MAX_MM = 6.0
-XTAL_SERIES_MAX_MM = 4.0
+# Only the decoupling caps above must sit within 2 mm of their pad. The bias / strap /
+# source-termination parts below just need to be "close to the chip" (Espressif): they
+# stay 0402 inside the heatsink keep-out, within 6 mm. The 0R links (flash, SD, MIPI,
+# USB-HS: placeholders that cost nothing to fit) sit in line in their pad's escape
+# channel; neighbouring channels are 0.35 mm apart, so they stagger outwards (<= 10 mm).
+SOC_SUPPORT_MAX_MM = 7.0
+SOC_TERM_MAX_MM = 8.5
+SOC_LINK_MAX_MM = 10.0
+XTAL_SERIES_MAX_MM = 6.5
 
 _G = "SoC support"
 R("0", "+3V3", "VDD_USBPHY", _G, place=Near("U1", "51", SOC_SUPPORT_MAX_MM), note="VDD_USBPHY feed (Espressif R40)")
@@ -698,7 +712,7 @@ C("12pF", "XTAL_N_Y", GND, "Clock", place=Near("Y1", "3", 2.0),
 _G = "QSPI flash"
 for _sig in ("CS", "Q", "WP", "HOLD", "CK", "D"):
     R("0", f"FLASH_{_sig}", f"FLASH_{_sig}_M", _G, place=Near("U1", {
-        "CS": "27", "Q": "28", "WP": "29", "HOLD": "31", "CK": "32", "D": "33"}[_sig], SOC_SUPPORT_MAX_MM),
+        "CS": "27", "Q": "28", "WP": "29", "HOLD": "31", "CK": "32", "D": "33"}[_sig], SOC_LINK_MAX_MM),
       note="Espressif-recommended series footprint (drive/EMI tuning)")
 add("U2", FLASH, {"~CS": "FLASH_CS_M", "DO/IO1": "FLASH_Q_M", "~WP/IO2": "FLASH_WP_M",
                   "GND": GND, "DI/IO0": "FLASH_D_M", "CLK": "FLASH_CK_M",
@@ -780,8 +794,8 @@ def usb_port(ref: str, vbus: str, dp: str, dm: str, esd: PartType, esd_ref: str,
 _G = "USB1 HS"
 usb_port("J1", "VBUS1", "USB1_D_P", "USB1_D_N", ESD_USB_HS, "U7", _G,
          Place(22.0, 36.0, 0.0, faces="bottom"))
-R("0", "USB1_D_P", "USBHS_D_P", _G, place=Near("U1", "50", SOC_SUPPORT_MAX_MM), note="Espressif: reserve R/C near SoC")
-R("0", "USB1_D_N", "USBHS_D_N", _G, place=Near("U1", "49", SOC_SUPPORT_MAX_MM), note="Espressif: reserve R/C near SoC")
+R("0", "USB1_D_P", "USBHS_D_P", _G, place=Near("U1", "50", SOC_LINK_MAX_MM), note="Espressif: reserve R/C near SoC")
+R("0", "USB1_D_N", "USBHS_D_N", _G, place=Near("U1", "49", SOC_LINK_MAX_MM), note="Espressif: reserve R/C near SoC")
 
 # J2: debug UART through CP2102N (self-powered from +3V3)
 _G = "USB2 debug UART"
@@ -828,7 +842,7 @@ add("U5", PHY, {"VDD2A": "PHY_AVDD", "LED2/~INTSEL": "PHY_LED2", "LED1/REGOFF": 
 # RMII series terminations: at the driver (SoC for TX, PHY for RX/CLK).
 for _net, _anchor in (("RMII_TXD0", ("U1", "65")), ("RMII_TXD1", ("U1", "66")),
                       ("RMII_TX_EN", ("U1", "92"))):
-    R("22", _net, f"{_net}_PHY", _G, place=Near(*_anchor, SOC_SUPPORT_MAX_MM), note="Source termination at SoC")
+    R("22", _net, f"{_net}_PHY", _G, place=Near(*_anchor, SOC_TERM_MAX_MM), note="Source termination at SoC")
 for _net, _pad in (("RMII_RXD0", "8"), ("RMII_RXD1", "7"), ("RMII_CRS_DV", "11"),
                    ("RMII_REF_CLK", "14")):
     R("33" if _net == "RMII_REF_CLK" else "22", f"{_net}_PHY", _net, _G,
@@ -869,7 +883,7 @@ R("330", "PHY_LED2", "ETH_LED_SPEED_A", _G, place=Near("U5", "2", 5.0), note="Sp
 _G = "microSD"
 _SD_SIG = {"D0": "80", "D1": "81", "D2": "82", "D3": "83", "CLK": "84", "CMD": "86"}
 for _sig, _pad in _SD_SIG.items():
-    R("0", f"SD_{_sig}", f"SD_{_sig}_C", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
+    R("0", f"SD_{_sig}", f"SD_{_sig}_C", _G, place=Near("U1", _pad, SOC_LINK_MAX_MM),
       note="Espressif: reserve series R on every SDIO line")
 C("10pF", "SD_CLK_C", GND, _G, place=Near("U1", "84", SOC_SUPPORT_MAX_MM), dnp=True,
   note="Espressif: reserve CLK cap for tuning")
@@ -900,7 +914,7 @@ C("100nF", "SD_VDD", GND, _G, place=Near("J5", "4", 2.0))
 _G = "Camera CSI"
 for _lane, _pads in (("D0", ("43", "42")), ("D1", ("47", "46")), ("CLK", ("44", "45"))):
     for _pol, _pad in zip(("P", "N"), _pads):
-        R("0", f"CSI_{_lane}_{_pol}", f"CAM_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
+        R("0", f"CSI_{_lane}_{_pol}", f"CAM_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_LINK_MAX_MM),
           note="Espressif: reserve 0R on MIPI lines")
 add("J_CAM", FPC22, {"D0_N": "CAM_D0_N", "D0_P": "CAM_D0_P", "D1_N": "CAM_D1_N",
                      "D1_P": "CAM_D1_P", "CLK_N": "CAM_CLK_N", "CLK_P": "CAM_CLK_P",
@@ -916,7 +930,7 @@ C("100nF", "+3V3", GND, _G, place=Near("J_CAM", "22"))
 _G = "Display DSI"
 for _lane, _pads in (("D0", ("39", "40")), ("D1", ("35", "36")), ("CLK", ("38", "37"))):
     for _pol, _pad in zip(("P", "N"), _pads):
-        R("0", f"DSI_{_lane}_{_pol}", f"DISP_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_SUPPORT_MAX_MM),
+        R("0", f"DSI_{_lane}_{_pol}", f"DISP_{_lane}_{_pol}", _G, place=Near("U1", _pad, SOC_LINK_MAX_MM),
           note="Espressif: reserve 0R on MIPI lines")
 add("J_DSI", FPC22, {"D0_N": "DISP_D0_N", "D0_P": "DISP_D0_P", "D1_N": "DISP_D1_N",
                      "D1_P": "DISP_D1_P", "CLK_N": "DISP_CLK_N", "CLK_P": "DISP_CLK_P",

@@ -13,7 +13,7 @@ All coordinates, dimensions and part data are read from `hardware/lib/board_spec
 
 The heatsink sits flush on the SoC lid: nothing inside the 25 x 25 mm keep-out is taller than 0.55 mm, so the base clears every 0402 by >= 0.35 mm. Black anodising is not a guaranteed insulator -- the gap is the insulation, and the 4-point spring clamp keeps the base parallel to the board.
 
-Assembly is double-sided: 8 decoupling caps (C20, C21, C23, C26, C28, C29, C31, C33) sit on the bottom under the SoC's right-hand pad ring, outside the thermal-via field. So only the via field is left mask-free (6.6 x 6.6 mm, `BOTTOM_THERMAL_WINDOW_MM`); the rest of the 14 x 14 mm spreader copper (`BOTTOM_SPREADER_MM`) is under solder mask. A bottom gap pad or bracket must clear those 0402s (<= 0.55 mm) or be cut to the window.
+Assembly is double-sided: 15 decoupling caps (C10, C11, C13, C14, C20, C21, C23, C25, C26, C27, C28, C29, C31, C32, C33) sit on the bottom under the SoC's pad ring, outside the thermal-via field. So only the via field is left mask-free (6.6 x 6.6 mm, `BOTTOM_THERMAL_WINDOW_MM`); the rest of the 14 x 14 mm spreader copper (`BOTTOM_SPREADER_MM`) is under solder mask. A bottom gap pad or bracket must clear those 0402s (<= 0.55 mm) or be cut to the window.
 
 ### 1.1 Via-array thermal resistance
 
