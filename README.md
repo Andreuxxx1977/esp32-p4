@@ -26,7 +26,7 @@ file below and use GitHub's "Download raw file" button.
 
 | What you want | File | Notes |
 |---|---|---|
-| **PCB (KiCad board)** | `hardware/output/esp32p4_extreme.kicad_pcb` | **Not published yet.** A placed but *unrouted* KiCad 9 board is being generated and will appear here. Until then, use the netlist below. |
+| **PCB (KiCad board)** | `hardware/output/esp32p4_extreme.kicad_pcb` | **Not published yet.** A placed but *unrouted* KiCad board is being generated and will appear here. Until then, use the netlist below. |
 | **Netlist** (import into KiCad) | [`hardware/output/esp32p4_extreme.net`](hardware/output/esp32p4_extreme.net) | 231 parts, 175 nets, all footprints assigned. In KiCad: *PCB Editor -> File -> Import -> Netlist*. |
 | **Bill of materials for PCBWay** | [`hardware/output/bom_pcbway.csv`](hardware/output/bom_pcbway.csv) and [`docs/TASK4_bom_pcbway.md`](docs/TASK4_bom_pcbway.md) | Turnkey format: designator, qty, value, package, MPN, manufacturer, LCSC #. |
 | **Pinout / architecture** | [`docs/TASK1_pinout.md`](docs/TASK1_pinout.md) | All 55 GPIOs, dedicated pads, and a proof that the peripherals don't collide. |
@@ -91,6 +91,17 @@ flowchart LR
 | Routing, DRC in KiCad, Gerbers | Not started |
 | Fabrication, bring-up, firmware | Not started |
 
+## Verification: what GitHub checks on every commit
+
+Every push and pull request runs [`Design checks`](https://github.com/Andreuxxx1977/esp32-p4/actions/workflows/ci.yml)
+(badge at the top). Nothing is merged unless it passes. The results are public in the **Actions** tab.
+
+| CI job | What it proves |
+|---|---|
+| **Spec, netlist, docs and tests** | The design data passes its rules: no GPIO used twice, IO_MUX-only signals on legal pads, boot straps safe, heatsink/standoff keep-outs respected. The committed netlist matches the design pad by pad. A fresh SKiDL netlist passes ERC with 0 errors and 0 warnings. The docs and BOM are not stale. The 57 unit tests pass. |
+| **Pads exist in the real KiCad footprints** | Every connected pad exists in the official KiCad **10.0.6** footprint library. |
+| **KiCad 10 (pcbnew API, DRC, render, centroid)** | Runs the real KiCad 10 in its [official Docker image](https://hub.docker.com/r/kicad/kicad). Once the board file is committed it also runs KiCad's DRC, renders the board in 3D and exports the PCBWay pick-and-place file. Download these under *Artifacts* on the run page. |
+
 Open items to confirm against datasheets before ordering are listed at the end of
 [`docs/component_verification.md`](docs/component_verification.md) (items marked UNVERIFIED).
 
@@ -125,8 +136,11 @@ python -m pytest -q
 ```
 
 GitHub Actions runs the same steps on every push and pull request (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
-The KiCad footprint names target the **KiCad 9/10** standard libraries. The SoC footprint comes from
-[Espressif's KiCad library](https://github.com/espressif/kicad-libraries) (`PCM_Espressif:ESP32-P4`).
+The project targets **KiCad 10** and its standard libraries (checked against tag 10.0.6). KiCad 9.0.x
+names two shield pads differently: USB-C `S1` and microSD `11` instead of `SH`. The netlist opens there
+too, but those shield pads won't connect if you re-import footprints from a 9.0 library. The SoC
+footprint comes from [Espressif's KiCad library](https://github.com/espressif/kicad-libraries)
+(`PCM_Espressif:ESP32-P4`).
 
 ## Design decisions that differ from a "typical" P4 board
 

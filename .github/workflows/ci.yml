@@ -44,6 +44,58 @@ jobs:
       - name: Unit tests
         run: python -m pytest -q
 
+  kicad:
+    name: KiCad 10 (pcbnew API, DRC, render, centroid)
+    runs-on: ubuntu-latest
+    container:
+      image: kicad/kicad:10.0
+      # The image's default user (uid 1000) cannot write the runner workspace.
+      options: --user root
+    env:
+      BOARD: hardware/output/esp32p4_extreme.kicad_pcb
+      OUT: kicad-ci-output
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: KiCad and pcbnew Python API are available
+        run: |
+          kicad-cli version
+          python3 -c "import pcbnew; print('pcbnew', pcbnew.Version())"
+          mkdir -p "$OUT"
+
+      - name: Board file present?
+        id: board
+        run: |
+          if [ -f "$BOARD" ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$BOARD not committed yet - skipping DRC/render/centroid"; fi
+
+      - name: DRC (fails on real errors; unconnected items tolerated until routing)
+        if: steps.board.outputs.exists == 'true'
+        run: |
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output "$OUT/drc.json" "$BOARD"
+          python3 -m tools.check_drc_report "$OUT/drc.json"
+
+      - name: 3D renders (top / bottom)
+        if: steps.board.outputs.exists == 'true'
+        run: |
+          kicad-cli pcb render --side top --width 1600 --height 1200 --output "$OUT/board_top.png" "$BOARD"
+          kicad-cli pcb render --side bottom --width 1600 --height 1200 --output "$OUT/board_bottom.png" "$BOARD"
+
+      - name: Centroid / pick-and-place file for PCBWay
+        if: steps.board.outputs.exists == 'true'
+        run: |
+          kicad-cli pcb export pos --format csv --units mm --side both \
+            --use-drill-file-origin --output "$OUT/pick_and_place.csv" "$BOARD"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.board.outputs.exists == 'true'
+        with:
+          name: kicad-board-checks
+          path: kicad-ci-output/
+          if-no-files-found: warn
+
   footprints:
     name: Pads exist in the real KiCad footprints
     runs-on: ubuntu-latest

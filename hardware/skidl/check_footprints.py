@@ -47,10 +47,14 @@ if __package__ in (None, ""):
 from hardware.lib import board_spec as spec  # noqa: E402
 from hardware.lib import esp32p4_pinout as p4  # noqa: E402
 
-KICAD_RAW = ("https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
+# The spec targets the KiCad 10 stable libraries. Pin a release tag rather than
+# 'master' so the check matches what users install (KiCad 9.0.x names some
+# shield pads differently, e.g. USB4105 'S1' and DM3AT '11' instead of 'SH').
+KICAD_LIB_REF = os.environ.get("KICAD_LIB_REF", "10.0.6")
+KICAD_RAW = ("https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/{ref}/"
              "{lib}.pretty/{name}.kicad_mod")
 KICAD_TREE = ("https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-footprints/"
-              "repository/tree?ref=master&path={lib}.pretty&per_page=100&page={page}")
+              "repository/tree?ref={ref}&path={lib}.pretty&per_page=100&page={page}")
 ESPRESSIF_RAW = ("https://raw.githubusercontent.com/espressif/kicad-libraries/main/"
                  "footprints/Espressif.pretty/{name}.kicad_mod")
 DEFAULT_CACHE = Path(os.environ.get("KICAD_FP_CACHE", Path.home() / ".cache" / "esp32p4-footprints"))
@@ -64,8 +68,9 @@ _ATTR = re.compile(r"\(attr\s+([^)]*)\)")
 # ---------------------------------------------------------------------------
 
 class Fetcher:
-    def __init__(self, cache: Path, offline: bool = False) -> None:
-        self.cache = cache
+    def __init__(self, cache: Path, offline: bool = False, ref: str = KICAD_LIB_REF) -> None:
+        self.ref = ref
+        self.cache = cache / ref          # never mix footprints from different library versions
         self.offline = offline
 
     def _get(self, url: str) -> str | None:
@@ -88,7 +93,8 @@ class Fetcher:
         if lib == "PCM_Espressif":
             url = ESPRESSIF_RAW.format(name=urllib.parse.quote(name))
         else:
-            url = KICAD_RAW.format(lib=urllib.parse.quote(lib), name=urllib.parse.quote(name))
+            url = KICAD_RAW.format(ref=self.ref, lib=urllib.parse.quote(lib),
+                                   name=urllib.parse.quote(name))
         text = self._get(url)
         if text is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +109,7 @@ class Fetcher:
         names: list[str] = []
         page = 1
         while not self.offline:
-            text = self._get(KICAD_TREE.format(lib=urllib.parse.quote(lib), page=page))
+            text = self._get(KICAD_TREE.format(ref=self.ref, lib=urllib.parse.quote(lib), page=page))
             batch = json.loads(text) if text else []
             names += [e["name"][:-len(".kicad_mod")] for e in batch
                       if e["name"].endswith(".kicad_mod")]
@@ -290,8 +296,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check spec pads against real KiCad footprints")
     ap.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help="download cache directory")
     ap.add_argument("--offline", action="store_true", help="use the cache only")
+    ap.add_argument("--ref", default=KICAD_LIB_REF,
+                    help=f"kicad-footprints git tag/branch to check against (default {KICAD_LIB_REF})")
     args = ap.parse_args(argv)
-    rep = check(Fetcher(args.cache, args.offline))
+    print(f"KiCad footprint library ref: {args.ref}")
+    rep = check(Fetcher(args.cache, args.offline, args.ref))
     print("\n".join(rep.lines))
     print(f"\n==== {len(rep.errors)} error(s)")
     for e in rep.errors:
