@@ -91,11 +91,15 @@ jobs:
       - name: 3D renders (top / bottom) with the parts' 3D models
         if: steps.board.outputs.exists == 'true'
         run: |
+          # the routed board once it exists (same parts, plus copper)
+          RENDER="$BOARD"
+          if [ -f hardware/output/routed/esp32p4_extreme.kicad_pcb ]; then
+            RENDER=hardware/output/routed/esp32p4_extreme.kicad_pcb; fi
           # KiCad's 3D models are a separate library: fetch exactly the ones the board uses
-          export KICAD10_3DMODEL_DIR="$(python3 -m tools.fetch_3d_models "$BOARD" --dest "$RUNNER_TEMP/3d")"
+          export KICAD10_3DMODEL_DIR="$(python3 -m tools.fetch_3d_models "$RENDER" --dest "$RUNNER_TEMP/3d")"
           for side in top bottom; do
             kicad-cli pcb render --side "$side" --width 1600 --height 1200 --quality high \
-              --output "$OUT/board_$side.png" "$BOARD"
+              --output "$OUT/board_$side.png" "$RENDER"
           done
 
       - name: Publish the renders to the 'renders' branch (main only)
@@ -124,6 +128,51 @@ jobs:
         with:
           name: kicad-board-checks
           path: kicad-ci-output/
+          if-no-files-found: warn
+
+  fab:
+    name: Routed board (DRC, same design as placed, Gerbers reproducible)
+    runs-on: ubuntu-latest
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    env:
+      PLACED: hardware/output/esp32p4_extreme.kicad_pcb
+      ROUTED: hardware/output/routed/esp32p4_extreme.kicad_pcb
+      OUT: kicad-fab-output
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Routed board present?
+        id: routed
+        run: |
+          mkdir -p "$OUT"
+          if [ -f "$ROUTED" ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$ROUTED not committed yet - skipping the fabrication checks"; fi
+
+      - name: Routed board = placed board + copper (footprints, positions, pad nets, zones)
+        if: steps.routed.outputs.exists == 'true'
+        run: python3 hardware/pcbnew/preroute.py --board "$PLACED" --verify "$ROUTED"
+
+      - name: DRC of the routed board (fully connected, no manufacturing/electrical errors)
+        if: steps.routed.outputs.exists == 'true'
+        run: |
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output "$OUT/routed_drc.json" "$ROUTED"
+          python3 -m tools.check_drc_report "$OUT/routed_drc.json" --routed
+
+      - name: Committed Gerbers / drills / IPC-356 / pick-and-place match the routed board
+        if: steps.routed.outputs.exists == 'true'
+        run: |
+          python3 -m tools.export_fab "$ROUTED" --check
+          python3 -m tools.export_fab "$ROUTED" --out "$OUT/fab"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.routed.outputs.exists == 'true'
+        with:
+          name: fabrication-package
+          path: kicad-fab-output/
           if-no-files-found: warn
 
   footprints:

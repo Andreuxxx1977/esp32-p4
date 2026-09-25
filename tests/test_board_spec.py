@@ -202,7 +202,14 @@ def test_decoupling_near_u1_is_0402():
     assert caps
     assert [c.ref for c in near if c.part.package != "0402" or c.part.kind not in ("res", "cap")] == []
     assert [c.ref for c in near if c.part.height_mm > bs.KEEPOUT_MAX_HEIGHT_MM] == []
-    assert [c.ref for c in caps if c.group == "SoC decoupling" and c.place.max_mm > 2.0] == []
+    dec = [c for c in caps if c.group == "SoC decoupling"]
+    # the first cap of every decoupled pad within SOC_DECAP_MAX_MM, bulk within SOC_BULK_MAX_MM
+    first = {(pad, vals[0]) for pad, _, vals in bs.SOC_DECOUPLING}
+    assert len([c for c in dec if (c.place.pad, c.value) in first]) == len(bs.SOC_DECOUPLING)
+    assert [c.ref for c in dec if (c.place.pad, c.value) in first
+            and c.place.max_mm > bs.SOC_DECAP_MAX_MM] == []
+    assert [c.ref for c in dec if c.place.max_mm > bs.SOC_BULK_MAX_MM] == []
+    assert bs.SOC_DECAP_MAX_MM <= 2.3 and bs.SOC_BULK_MAX_MM <= 4.0
 
 
 @pytest.mark.parametrize("rule", imp.impedance_rules(), ids=lambda r: r.netclass)

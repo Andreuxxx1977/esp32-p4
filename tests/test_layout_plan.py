@@ -143,7 +143,8 @@ def test_decoupling_caps_point_gnd_away_from_the_soc(plan):
     """Top-side SoC caps: the pad on the decoupled rail is the one nearest the SoC pad."""
     for comp in bs.COMPONENTS:
         p = plan.placements[comp.ref]
-        if p.method != "ring-F" or comp.part.kind != "cap" or bs.GND not in comp.conns.values():
+        if not (isinstance(comp.place, bs.Near) and comp.place.ref == "U1" and p.side == "F"
+                and comp.part.kind == "cap" and bs.GND in comp.conns.values()):
             continue
         u1 = plan.placements["U1"]
         tx, ty = u1.pad_positions(comp.place.pad)[0][1:]
@@ -151,6 +152,39 @@ def test_decoupling_caps_point_gnd_away_from_the_soc(plan):
         gnd = next(n for n, net in comp.conns.items() if net == bs.GND)
         rail = next(n for n, net in comp.conns.items() if net != bs.GND)
         assert math.dist(pads[rail], (tx, ty)) < math.dist(pads[gnd], (tx, ty)), comp.ref
+
+
+def test_soc_escape_channels_stay_open(plan):
+    """Re-check the planned top side against the U1 escape-channel model from scratch."""
+    model = lp.EscapeModel()
+    planner = lp.Planner()
+    planner.plan = plan
+    for ref, p in plan.placements.items():
+        if ref != "U1" and (p.side == "F" or p.tht) and model.in_zone(p.shape().rect):
+            model.add(planner._escape_obstacles(p))
+    assert sum(len(v) for v in model.placed.values()) > 50
+    assert model.violations() == []
+    assert sum(len(v) for v in model.channels.values()) == 100  # U1 pads 1-104 minus 4 NC
+
+
+def test_soc_parts_sit_in_line_with_their_pad(plan):
+    """A top-side U1 part is reachable along its own pad's escape channel."""
+    u1_nets = next(c for c in bs.COMPONENTS if c.ref == "U1").conns
+    u1 = plan.placements["U1"]
+    checked = 0
+    for comp in bs.COMPONENTS:
+        p = plan.placements[comp.ref]
+        if not (isinstance(comp.place, bs.Near) and comp.place.ref == "U1" and p.side == "F"):
+            continue
+        targets = [(x, y) for _, x, y in u1.pad_positions(comp.place.pad)]
+        net = u1_nets[comp.place.pad]
+        same = {fp for spec, n in comp.conns.items() if n == net
+                for fp in plan.pad_maps[comp.ref].get(spec, ())}
+        pads = [(x, y) for n, x, y in p.pad_positions() if n in same] or \
+            [(x, y) for _, x, y in p.pad_positions()]    # e.g. a filter cap behind a series R
+        assert lp.Planner._in_channel(pads, targets), comp.ref
+        checked += 1
+    assert checked > 40
 
 
 def test_nothing_in_the_hole_keepout_circles(plan):
@@ -529,3 +563,29 @@ def test_board_file_is_up_to_date(tmp_path, plan):
     out = tmp_path / BOARD.name
     w.write(out, lp.DEFAULT_CACHE, offline=True)
     assert out.read_text() == BOARD.read_text(), "run `python3 -m hardware.pcbnew.write_kicad_pcb`"
+
+
+# ==========================================================================
+# SoC escape tracks (hardware/pcbnew/escape_tracks.json)
+# ==========================================================================
+
+def test_escape_tracks_are_clear_of_every_other_net(plan):
+    """The committed escape tracks keep netclass clearance to other-net pads and to each
+    other on the *current* plan (re-solve with `layout_plan escapes` after moving parts)."""
+    tracks = lp.load_escape_tracks()
+    assert len(tracks) >= 60
+    assert lp.check_escape_tracks(plan, tracks) == []
+
+
+def test_escape_tracks_start_at_their_stub_and_move_at_most_45_degrees(plan):
+    chans = {ch.pad: ch for side in lp.escape_channels().values() for ch in side}
+    for tr in lp.load_escape_tracks():
+        ch = chans[tr.pad]
+        assert tr.net == ch.net and tr.width == ch.width
+        x, y = tr.points[0]
+        side, t, r = lp.polar(x, y)
+        assert side == ch.side and abs(t - ch.t) < 1e-3 and abs(r - lp.U1_STUB_END_MM) < 1e-3
+        for (x0, y0), (x1, y1) in zip(tr.points, tr.points[1:]):
+            _, t0, r0 = lp.polar(x0, y0)
+            _, t1, r1 = lp.polar(x1, y1)
+            assert r1 > r0 and abs(t1 - t0) <= (r1 - r0) + 1e-3, tr.pad      # outwards, <= 45 deg

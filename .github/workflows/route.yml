@@ -1,0 +1,65 @@
+name: Route the board (own router)
+
+# Manual only: re-creates hardware/output/routed/ and hardware/output/fab/ from the placed
+# board, so anyone can reproduce (or improve) the committed routing. Download the result
+# from the run's Artifacts and commit it in a pull request; the regular CI then checks it
+# (same design as the placed board, DRC, Gerbers reproducible).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    env:
+      PREROUTED: build/prerouted/esp32p4_extreme.kicad_pcb
+      ROUTED: hardware/output/routed/esp32p4_extreme.kicad_pcb
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Router dependencies (C compiler for the search core, numpy, scipy)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq gcc python3-numpy python3-scipy
+
+      - name: Pre-route the SoC fan-out (stubs, escape tracks, vias)
+        run: python3 hardware/pcbnew/preroute.py --out "$PREROUTED"
+
+      - name: Route everything else (KiCad's DRC judges every pass)
+        run: |
+          python3 -m tools.pcb_router "$PREROUTED" -o "$ROUTED" --kicad-cli kicad-cli && exit 0
+          # What is still missing is routed again from the result (--resume): the earlier
+          # routing may be ripped up again, with fresh rip-up budgets. The committed board
+          # came from one pass and five resumed ones (the router improved between them).
+          for pass in 2 3 4 5 6 7; do
+            for f in kicad_pcb kicad_pro kicad_dru; do cp "${ROUTED%.kicad_pcb}.$f" "build/pass.$f"; done
+            echo "::group::pass $pass"
+            if python3 -m tools.pcb_router build/pass.kicad_pcb -o "$ROUTED" --kicad-cli kicad-cli --resume; then
+              echo "::endgroup::"; exit 0; fi
+            echo "::endgroup::"
+          done
+          exit 1
+
+      - name: Same design, DRC gate, fabrication package
+        run: |
+          python3 hardware/pcbnew/preroute.py --verify "$ROUTED"
+          kicad-cli pcb drc --format json --severity-all --units mm \
+            --output build/routed_drc.json "$ROUTED"
+          python3 -m tools.check_drc_report build/routed_drc.json --routed
+          python3 -m tools.export_fab "$ROUTED" --drc build/routed_drc.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: routed-board
+          path: |
+            hardware/output/routed/
+            hardware/output/fab/
+            build/
+          if-no-files-found: warn

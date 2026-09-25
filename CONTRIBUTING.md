@@ -34,14 +34,41 @@ python -m hardware.pcbnew.write_kicad_pcb          #    placement plan -> .kicad
 python -m pytest -q                                # 8. all tests green
 ```
 
+## Routing and fabrication files
+
+The routed board (`hardware/output/routed/`) and the fabrication package (`hardware/output/fab/`)
+are generated from the placed board, never edited by hand. A routing pass takes up to an hour and needs
+KiCad 10 (its Python for step 2, `kicad-cli` for step 3), a C compiler, numpy and scipy:
+
+```bash
+python -m hardware.pcbnew.layout_plan escapes      # 1. only after moving parts near U1 (~20 min)
+python3 hardware/pcbnew/preroute.py --out build/prerouted/esp32p4_extreme.kicad_pcb   # 2. SoC fan-out
+python3 -m tools.pcb_router build/prerouted/esp32p4_extreme.kicad_pcb \
+    -o hardware/output/routed/esp32p4_extreme.kicad_pcb --kicad-cli kicad-cli            # 3. route
+# 3b. while KiCad still reports unconnected items (exit code 1): copy the result (.kicad_pcb,
+#     .kicad_pro, .kicad_dru) to build/pass.* and route again from it with --resume
+python3 -m tools.export_fab --drc hardware/output/routed/esp32p4_extreme.drc.json      # 4. Gerbers
+```
+
+The manual GitHub workflow **Route the board (own router)** runs the same steps and uploads the
+result. `tools/pcb_router.py` is a router written for this board (a grid router with an exact
+clearance model; see its docstring): differential pairs first and coupled, then clocks and 50-ohm
+nets, wide power, the rest; rip-up and reroute; KiCad's DRC judges every pass and what it reports is
+ripped up and routed again. CI checks that the committed routed board is the placed board plus
+copper, that it passes the DRC gate (`tools/check_drc_report.py --routed`) and that the committed
+Gerbers are exactly what it produces.
+
 ## Conventions in the data model
 
 - **Coordinates:** millimetres, relative to the **ESP32-P4 body centre = (0, 0)**, KiCad axes
   (+X right, **+Y down**). `Place(x, y, rot)` is the footprint origin; for pin headers that is pin 1.
 - **Relative placement:** `Near(ref, pad, max_mm, side)` means "place within `max_mm` of that pad, on
-  side `F` (top) or `B` (bottom)". The SoC decoupling uses `max_mm = 2.0`. Series/bias parts near
-  the SoC use `SOC_SUPPORT_MAX_MM` (6 mm). The 8 caps in `BOTTOM_DECOUPLING` sit on the bottom under
-  the SoC's right-hand pad ring, which makes assembly double-sided.
+  side `F` (top) or `B` (bottom)". Near the SoC every connected pad keeps a straight *escape
+  channel* for its track (see "SoC escape channels" in `hardware/pcbnew/layout_plan.py`), so a
+  part may only sit in line with its own pad. The first decoupling cap of a pad is within
+  `SOC_DECAP_MAX_MM` (2.3 mm), bulk caps within `SOC_BULK_MAX_MM` (4 mm), bias/strap parts within
+  `SOC_SUPPORT_MAX_MM`, 0R links within `SOC_LINK_MAX_MM`. The caps in `BOTTOM_DECOUPLING` sit on
+  the bottom under the SoC's pad ring, which makes assembly double-sided.
 - **Heatsink keep-out:** inside the 25 x 25 mm square around the SoC only **U1 and 0402 passives** are
   allowed (the heatsink sits flush on the SoC). Also keep parts `HEATSINK_HOLE_KEEPOUT_R` (3.5 mm)
   away from the four M2.5 standoff holes. `validate()` enforces both.
@@ -58,9 +85,11 @@ python -m pytest -q                                # 8. all tests green
 
 ## Where help is most welcome
 
-1. **Routing** the placed board in KiCad 10 while respecting the impedance rules
+1. **Routing review / improvements**: the prototype routing is machine-made. Hand-routing or
+   improving the high-speed nets (coupling, length matching of the pairs that the report in
+   `hardware/output/fab/README.md` lists) against the impedance rules
    (`hardware/lib/impedance.py`: 50 ohm SE, 90 ohm USB, 100 ohm MIPI/Ethernet) and the Espressif
-   layout rules summarised in `docs/TASK1_pinout.md`.
+   layout rules summarised in `docs/TASK1_pinout.md` is very welcome.
 2. **Datasheet review** of the items still marked **UNVERIFIED** in `docs/component_verification.md`.
 3. **Fabrication and bring-up reports**: photos, current measurements, thermal readings.
 4. **Firmware**: ESP-IDF board support (fan curve from the internal temperature sensor, LAN8720A, SD UHS-I).

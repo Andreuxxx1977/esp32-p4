@@ -7,9 +7,14 @@ clearance, holes, edge clearance, keep-out/rule-area hits ...).
 
 Once the board is routed, run with ``--strict`` so unconnected items fail too.
 
+``--routed`` is the gate for the routed prototype (``tools/pcb_router.py``): strict,
+except that the signal-integrity rules of the .kicad_dru (differential-pair gap/coupling,
+skew, length) are listed as *not met* instead of failing. They are real and are published
+with the fabrication files; they are not manufacturing defects.
+
 Usage::
 
-    python -m tools.check_drc_report drc.json [--strict] [--allow TYPE ...]
+    python -m tools.check_drc_report drc.json [--strict | --routed] [--allow TYPE ...]
 """
 
 from __future__ import annotations
@@ -22,6 +27,22 @@ from pathlib import Path
 
 # Violation types that are expected while the board is only placed.
 PLACEMENT_PHASE_ALLOWED = frozenset({"unconnected_items"})
+# Signal-integrity constraints (custom rules), reported but not blocking with --routed.
+SI_RULE_TYPES = frozenset({
+    "diff_pair_gap_out_of_range", "diff_pair_uncoupled_length_too_long",
+    "skew_out_of_range", "length_out_of_range",
+})
+
+
+def si_summary(report: dict) -> list[str]:
+    """One line per net group that misses a signal-integrity rule."""
+    seen = Counter()
+    for v in report.get("violations", []):
+        if v.get("type") in SI_RULE_TYPES:
+            nets = sorted({i.get("description", "").split("[")[-1].split("]")[0]
+                           for i in v.get("items", []) if "[" in i.get("description", "")})
+            seen[(v.get("type"), ", ".join(nets))] += 1
+    return [f"  {typ}: {nets or '?'} ({n}x)" for (typ, nets), n in sorted(seen.items())]
 
 
 def summarize(report: dict, strict: bool = False,
@@ -49,21 +70,35 @@ def summarize(report: dict, strict: bool = False,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("report", type=Path)
-    ap.add_argument("--strict", action="store_true", help="also fail on unconnected items")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--strict", action="store_true", help="also fail on unconnected items")
+    mode.add_argument("--routed", action="store_true",
+                      help="strict, but list signal-integrity rule misses instead of failing")
     ap.add_argument("--allow", action="append", default=[], metavar="TYPE",
                     help="additional violation type to tolerate (repeatable)")
     args = ap.parse_args(argv)
     report = json.loads(args.report.read_text())
-    lines, blocking = summarize(report, args.strict,
-                                PLACEMENT_PHASE_ALLOWED | frozenset(args.allow))
+    if args.routed:
+        lines, blocking = summarize(report, False, SI_RULE_TYPES | frozenset(args.allow))
+    else:
+        lines, blocking = summarize(report, args.strict,
+                                    PLACEMENT_PHASE_ALLOWED | frozenset(args.allow))
     print("\n".join(lines))
+    si = si_summary(report) if args.routed else []
+    if si:
+        print(f"\nSignal-integrity rules NOT met ({len(si)} net group/rule pairs):")
+        print("\n".join(si))
     if blocking:
         print(f"\nFAIL: {len(blocking)} blocking DRC problem(s)")
         for b in blocking[:200]:
             print("  - " + b)
         return 1
-    print("\nPASS: no blocking DRC errors"
-          + ("" if args.strict else " (unconnected items tolerated: board not routed yet)"))
+    if args.routed:
+        print("\nPASS: fully connected, no manufacturing/electrical DRC errors"
+              + (" (signal-integrity rules above not met)" if si else ""))
+    else:
+        print("\nPASS: no blocking DRC errors"
+              + ("" if args.strict else " (unconnected items tolerated: board not routed yet)"))
     return 0
 
 

@@ -1392,7 +1392,7 @@ def _thermal_section() -> list[str]:
          "anodising is not a guaranteed insulator -- the gap is the insulation, and the 4-point spring "
          "clamp keeps the base parallel to the board.", "",
          f"Assembly is double-sided: {len(bs.bottom_side_refs())} decoupling caps "
-         f"({', '.join(bs.bottom_side_refs())}) sit on the bottom under the SoC's right-hand pad ring, "
+         f"({', '.join(bs.bottom_side_refs())}) sit on the bottom under the SoC's pad ring, "
          "outside the thermal-via field. So only the via field is left mask-free "
          f"({f(WINDOW_MM, 1)} x {f(WINDOW_MM, 1)} mm, `BOTTOM_THERMAL_WINDOW_MM`); the rest of the "
          f"{f(SPREADER_MM, 0)} x {f(SPREADER_MM, 0)} mm spreader copper (`BOTTOM_SPREADER_MM`) is under solder "

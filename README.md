@@ -7,9 +7,11 @@ An open-hardware, actively cooled ESP32-P4 board for heavy multimedia work: a 2-
 a 2-lane MIPI display, USB 2.0 High-Speed, 10/100 Ethernet, UHS-I microSD, 32 MB flash and
 32 MB PSRAM. It uses a 4-layer HDI PCB, a 3 A 3.3 V rail, and a heatsink + PWM fan over the SoC.
 
-> **Status: design complete and placed; routing not started.**
-> Parts, pinout, netlist, BOM, docs and the **placed KiCad 10 board** are finished and machine-checked
-> (KiCad DRC: 0 errors). Routing, Gerbers, fabrication and bench testing have **not** been done yet.
+> **Status: designed, routed, Gerbers generated; not fabricated yet.**
+> Parts, pinout, netlist, BOM, docs, the placed board and the **routed KiCad 10 board with its
+> Gerbers** are finished and machine-checked (KiCad DRC: fully connected, 0 manufacturing or
+> electrical errors). Some high-speed rules (differential-pair coupling and length matching) are
+> **not** met yet, and the board has **not** been fabricated or bench-tested.
 > Check [Project status](#project-status) before ordering anything.
 
 | Top | Bottom |
@@ -17,13 +19,43 @@ a 2-lane MIPI display, USB 2.0 High-Speed, 10/100 Ethernet, UHS-I microSD, 32 MB
 | ![Top of the board, rendered by KiCad 10](https://raw.githubusercontent.com/Andreuxxx1977/esp32-p4/renders/board_top.png) | ![Bottom of the board, rendered by KiCad 10](https://raw.githubusercontent.com/Andreuxxx1977/esp32-p4/renders/board_bottom.png) |
 
 *Rendered by KiCad 10 in CI from the committed board on every push to `main` (published to the
-[`renders`](https://github.com/Andreuxxx1977/esp32-p4/tree/renders) branch). Placed, not yet routed. The
+[`renders`](https://github.com/Andreuxxx1977/esp32-p4/tree/renders) branch), the routed board once it is on `main`. The
 RJ45 and FPC connectors have no model in KiCad's 3D library, so they show as footprints. The ESP32-P4
 body is a representative 10 x 10 mm QFN (Espressif ships no 3D model).*
 
 > **Resumen en español:** placa de desarrollo abierta con ESP32-P4, refrigeración activa, cámara y
 > pantalla MIPI, USB-HS, Ethernet y microSD. Todos los archivos se generan desde un único modelo en
-> Python. Libre de usar citando este proyecto como original (ver [Licencia](#license-free-to-use-just-credit-the-original-project)).
+> Python. La placa está enrutada (con un enrutador propio) y tiene Gerbers; aún no se ha fabricado. Libre de usar citando este proyecto como original (ver [Licencia](#license-free-to-use-just-credit-the-original-project)).
+
+## How this project was made: about 95 % by an AI agent
+
+This board is an experiment in AI-driven hardware design. **Roughly 95 % of the work in this repository
+was done by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent**, working
+from a written brief. It did the component research and part selection, the ESP32-P4 pin-mux
+analysis, the Python data model, the SKiDL netlist, the KiCad placement script, its own PCB router, the BOM,
+the documentation, the tests and the CI that checks all of it.
+
+The remaining ~5 % is human, by the repository owner: writing the brief, making the decisions the
+agent asked for (licence, double-sided assembly, adding a display connector), and reviewing and
+merging every change.
+
+What that means for you:
+
+- **Everything that can be checked by a machine is checked**, on every commit, with the real KiCad
+  tools (see [Verification](#verification-what-github-checks-on-every-commit)). Every part number and
+  pinout has a source link in [`docs/component_verification.md`](docs/component_verification.md).
+- **What a machine can't prove is listed as open**: datasheet fine print marked UNVERIFIED, signal
+  integrity of the high-speed links, thermal behaviour, and whether the board works on the bench.
+  No experienced hardware engineer has reviewed it yet, and it has not been fabricated.
+- Treat it as a well-documented starting point, not a proven product. Reviews and bring-up reports
+  are very welcome.
+
+> **En español:** alrededor del **95 % de este proyecto lo ha hecho Claude Code**, el agente de
+> programación con IA de Anthropic, a partir de un enunciado escrito: investigación y elección de
+> componentes, pinout, netlist, colocación en KiCad, un enrutador de PCB propio, BOM, documentación, tests y CI. El
+> ~5 % restante es humano: el enunciado, las decisiones que el agente pidió y la revisión y fusión de
+> cada cambio. Todo lo comprobable automáticamente se comprueba en cada commit; lo que no (integridad
+> de señal, térmica, funcionamiento real) está marcado como pendiente. Aún no se ha fabricado.
 
 ---
 
@@ -35,7 +67,9 @@ file below and use GitHub's "Download raw file" button.
 
 | What you want | File | Notes |
 |---|---|---|
-| **PCB: KiCad 10 project** (open the `.kicad_pro`) | [`hardware/output/esp32p4_extreme.kicad_pro`](hardware/output/esp32p4_extreme.kicad_pro) + [`esp32p4_extreme.kicad_pcb`](hardware/output/esp32p4_extreme.kicad_pcb) + [`esp32p4_extreme.kicad_dru`](hardware/output/esp32p4_extreme.kicad_dru) | **All parts placed, not routed yet** (ratsnest only). Stack-up, net classes, diff pairs, zones, thermal vias, keep-outs and custom DRC rules are set up. Download all three files into one folder. Opens in KiCad 9 and 10. |
+| **Gerbers for the fab** (PCBWay or any other) | [`hardware/output/fab/esp32p4_extreme_gerbers.zip`](hardware/output/fab/esp32p4_extreme_gerbers.zip) | Gerber X2 + Excellon drills + Gerber job file. The same folder has the IPC-356 netlist, the pick-and-place file and the BOM. **Read [its README](hardware/output/fab/README.md) first**: 4-layer HDI 1+2+1, filled and capped vias in pads, and the high-speed rules that are not met yet. |
+| **Routed PCB: KiCad 10 project** (open the `.kicad_pro`) | [`hardware/output/routed/esp32p4_extreme.kicad_pro`](hardware/output/routed/esp32p4_extreme.kicad_pro) + [`esp32p4_extreme.kicad_pcb`](hardware/output/routed/esp32p4_extreme.kicad_pcb) + [`esp32p4_extreme.kicad_dru`](hardware/output/routed/esp32p4_extreme.kicad_dru) | The board the Gerbers come from, routed by the project's own router ([`tools/pcb_router.py`](tools/pcb_router.py)). KiCad's DRC report is next to it ([`esp32p4_extreme.drc.json`](hardware/output/routed/esp32p4_extreme.drc.json)). Download the three files into one folder. |
+| **Placed PCB: KiCad 10 project** | [`hardware/output/esp32p4_extreme.kicad_pro`](hardware/output/esp32p4_extreme.kicad_pro) + [`esp32p4_extreme.kicad_pcb`](hardware/output/esp32p4_extreme.kicad_pcb) + [`esp32p4_extreme.kicad_dru`](hardware/output/esp32p4_extreme.kicad_dru) | All parts placed, no copper yet (ratsnest only): the input of the router. Stack-up, net classes, diff pairs, zones, thermal vias, keep-outs and custom DRC rules are set up. Opens in KiCad 9 and 10. |
 | **Netlist** (import into KiCad) | [`hardware/output/esp32p4_extreme.net`](hardware/output/esp32p4_extreme.net) | 231 parts, 175 nets, all footprints assigned. In KiCad: *PCB Editor -> File -> Import -> Netlist*. |
 | **Bill of materials for PCBWay** | [`hardware/output/bom_pcbway.csv`](hardware/output/bom_pcbway.csv) and [`docs/TASK4_bom_pcbway.md`](docs/TASK4_bom_pcbway.md) | Turnkey format: designator, qty, value, package, MPN, manufacturer, LCSC #. |
 | **Pinout / architecture** | [`docs/TASK1_pinout.md`](docs/TASK1_pinout.md) | All 55 GPIOs, dedicated pads, and a proof that the peripherals don't collide. |
@@ -96,8 +130,9 @@ flowchart LR
 | Every pad cross-checked against the real KiCad footprints | Done |
 | PCBWay BOM | Done: 63 fitted lines, 219 placements (215 SMD + 4 THT); pick-and-place file generated by CI |
 | Mechanical/thermal plan | Done: [`docs/TASK2_mechanical_thermal.md`](docs/TASK2_mechanical_thermal.md) |
-| Component placement: pcbnew script + downloadable KiCad 10 project | Done: 234 footprints, KiCad 10 DRC 0 errors, **double-sided** (8 x 0402 decoupling under the SoC on the bottom) |
-| Routing, DRC in KiCad, Gerbers | Not started |
+| Component placement: pcbnew script + downloadable KiCad 10 project | Done: 234 footprints, KiCad 10 DRC 0 errors, **double-sided** (15 x 0402 decoupling under the SoC on the bottom); every SoC pad keeps a routable escape channel |
+| Routing (own router), DRC in KiCad, Gerbers | Done as a prototype: every net routed on 4 layers, KiCad DRC with 0 unconnected items and 0 manufacturing/electrical errors, Gerbers + drills + IPC-356 + pick-and-place in [`hardware/output/fab/`](hardware/output/fab/) |
+| Signal integrity of the routing | **Open**: several differential pairs are not coupled over their whole length and miss the 10 mil skew target; the list is in [the fab README](hardware/output/fab/README.md). Needs review before ordering |
 | Fabrication, bring-up, firmware | Not started |
 
 ## Verification: what GitHub checks on every commit
@@ -107,9 +142,10 @@ Every push and pull request runs [`Design checks`](https://github.com/Andreuxxx1
 
 | CI job | What it proves |
 |---|---|
-| **Spec, netlist, docs and tests** | The design data passes its rules: no GPIO used twice, IO_MUX-only signals on legal pads, boot straps safe, heatsink/standoff keep-outs respected. The committed netlist matches the design pad by pad. A fresh SKiDL netlist passes ERC with 0 errors and 0 warnings. The docs and BOM are not stale. The 57 unit tests pass. |
+| **Spec, netlist, docs and tests** | The design data passes its rules: no GPIO used twice, IO_MUX-only signals on legal pads, boot straps safe, heatsink/standoff keep-outs respected. The committed netlist matches the design pad by pad. A fresh SKiDL netlist passes ERC with 0 errors and 0 warnings. The docs and BOM are not stale. The 129 unit tests pass. |
 | **Pads exist in the real KiCad footprints** | Every connected pad exists in the official KiCad **10.0.6** footprint library. |
-| **KiCad 10 (pcbnew API, DRC, render, centroid)** | Runs the real KiCad 10 in its [official Docker image](https://hub.docker.com/r/kicad/kicad). It rebuilds the board from scratch with the pcbnew placement script. Both that board and the committed one must pass KiCad's DRC with 0 errors (unconnected items are tolerated until routing). It also renders the board in 3D with the parts' models and exports the PCBWay pick-and-place file. Download these under *Artifacts* on the run page. |
+| **KiCad 10 (pcbnew API, DRC, render, centroid)** | Runs the real KiCad 10 in its [official Docker image](https://hub.docker.com/r/kicad/kicad). It rebuilds the board from scratch with the pcbnew placement script. Both that board and the committed placed one must pass KiCad's DRC with 0 errors (unconnected items are expected there: they are not routed). It also renders the board in 3D with the parts' models and exports the PCBWay pick-and-place file. Download these under *Artifacts* on the run page. |
+| **Routed board (DRC, same design as placed, Gerbers reproducible)** | The committed routed board has exactly the placed board's footprints, positions, pad nets and zones, plus copper. KiCad's DRC finds 0 unconnected items and 0 manufacturing or electrical errors; the high-speed rules it misses are listed, not hidden. A fresh export of the routed board gives the committed Gerbers, drills, IPC-356 and pick-and-place file line by line (time stamps aside). A separate manual workflow ([`route.yml`](.github/workflows/route.yml)) re-routes the board from the placed one. |
 
 Open items to confirm against datasheets before ordering are listed at the end of
 [`docs/component_verification.md`](docs/component_verification.md) (items marked UNVERIFIED).
@@ -126,7 +162,9 @@ hardware/lib/impedance.py        <- stack-up and 50/90/100 ohm trace geometry
         +--> hardware/skidl/esp32p4_extreme_netlist.py  -> hardware/output/esp32p4_extreme.net (+ nets CSV, ERC log)
         +--> hardware/pcbnew/                            -> hardware/output/esp32p4_extreme.kicad_pro/.kicad_pcb/.kicad_dru
         +--> tools/gen_docs.py                           -> docs/TASK1_*.md, TASK2_*.md, TASK4_*.md, bom_pcbway.csv
-        +--> tests/                                      -> 53 automated design checks
+        +--> hardware/pcbnew/preroute.py + tools/pcb_router.py -> hardware/output/routed/ (routed board)
+        +--> tools/export_fab.py                         -> hardware/output/fab/ (Gerbers, drills, IPC-356, pick-and-place)
+        +--> tests/                                      -> 129 automated tests
 ```
 
 So the pinout table, the netlist and the BOM can never disagree. To change the board, edit
@@ -145,6 +183,7 @@ python -m hardware.pcbnew.write_kicad_pcb          # regenerate the KiCad projec
 python -m pytest -q
 # with KiCad 10 installed (pcbnew Python), the same board through KiCad's own API:
 python3 hardware/pcbnew/esp32p4_extreme_place.py --fp-dir /usr/share/kicad/footprints --out /tmp/board.kicad_pcb
+# route the board again and export the Gerbers: CONTRIBUTING.md, "Routing and fabrication files"
 ```
 
 GitHub Actions runs the same steps on every push and pull request (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
@@ -176,7 +215,7 @@ files, the ESP32-P4 hardware design guidelines and Espressif's KiCad library.
 
 ## Contributing
 
-Issues and pull requests are welcome. Reviews of the schematic choices, routing help and bring-up
+Issues and pull requests are welcome. Reviews of the schematic choices and of the routing (above all the high-speed pairs) and bring-up
 reports are the most useful right now. Read [CONTRIBUTING.md](CONTRIBUTING.md) first: in short,
 edit `hardware/lib/board_spec.py`, regenerate, and commit the generated files with it.
 
@@ -196,9 +235,9 @@ You don't have to publish your own changes, and you don't have to use the same l
 derivative. That attribution line is the licence's "Notice", so keep it (CERN-OHL-P v2 section 3.2).
 If you modify the design, add a short note saying so (section 3.3).
 
-Why so permissive? This design was produced largely with an AI assistant (Claude Code) driving the
-research, the data model and the generated files. There's little personal merit to protect, so the goal
-is simply that it's useful to as many people as possible.
+Why so permissive? About 95 % of this design was produced by an AI agent (Claude Code, see
+[How this project was made](#how-this-project-was-made-about-95--by-an-ai-agent)). There's little personal
+merit to protect, so the goal is simply that it's useful to as many people as possible.
 
 **Libre de usar:** cualquiera puede usar, modificar, fabricar y vender este diseño. Lo único que se pide
 es mencionar que el proyecto original es https://github.com/Andreuxxx1977/esp32-p4.
