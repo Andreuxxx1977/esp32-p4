@@ -60,8 +60,10 @@ from hardware.lib import board_spec as bs  # noqa: E402
 from hardware.pcbnew import layout_plan as lp  # noqa: E402
 
 ORIGIN = lp.PAGE_ORIGIN_MM          # board file coordinates = design coordinates + ORIGIN
-LAYER_NAMES = ("F.Cu", "B.Cu")
-TOP, BOT = 1, 2                     # layer bits
+LAYER_NAMES = ("F.Cu", "B.Cu", "In2.Cu")   # routing layers 0, 1, 2 (In1.Cu stays a solid GND plane)
+TOP, BOT, IN2 = 1, 2, 4                    # layer bits
+NL = 3
+IN2_COST = 0.6                      # extra cost per step on In2 (the +3V3 plane layer): only when needed
 GRID_MM = 0.05
 MARGIN_MM = 0.01                    # on top of every clearance (grid slack)
 CLASSES = (0.10, 0.15, 0.20)        # clearance classes of obstacles; slot 3 = the pair partner,
@@ -79,8 +81,8 @@ NPTH, KEEPOUT = -1, -2              # pseudo net ids
 TURN45, TURN90 = 3.0, 20.0
 VIA_COST = 40.0                     # a via is worth 2 mm of track
 RIP_COST = 25.0                     # per step over a routed track of another net (rip-up search)
-HISTORY_STEP = 4.0
-MAX_RIPS = 6
+HISTORY_STEP = 10.0
+MAX_RIPS = 12
 WINDOWS_MM = (3.0, 8.0, 20.0)       # search windows around a connection, tried in turn
 MAX_WINDOW_CELLS = 2_600_000
 
@@ -115,9 +117,9 @@ def _core():
     i32, f32, f64, u8 = (P(dtype=t, flags="C_CONTIGUOUS") for t in (np.int32, np.float32, np.float64, np.uint8))
     lib.fields.argtypes = [ctypes.c_int, i32, i32, i32, i32, f64, f64, f64,
                            ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_int, ctypes.c_int,
-                           ctypes.c_double, ctypes.c_int, f32, f32]
+                           ctypes.c_double, ctypes.c_int, ctypes.c_int, f32, f32]
     lib.fields.restype = None
-    lib.astar.argtypes = [ctypes.c_int, ctypes.c_int, f32, u8, ctypes.c_float, u8, u8, i32,
+    lib.astar.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, f32, ctypes.c_int, i32, u8, f32, u8, u8, i32,
                           ctypes.c_float, ctypes.c_float, ctypes.c_long, i32, ctypes.c_int]
     lib.astar.restype = ctypes.c_int
     return lib
@@ -180,6 +182,8 @@ def layer_bits(names) -> int:
             bits |= TOP
         if n in ("B.Cu", "*.Cu", "F&B.Cu"):
             bits |= BOT
+        if n in ("In2.Cu", "*.Cu"):
+            bits |= IN2
     return bits
 
 
@@ -232,6 +236,26 @@ class Item:
         return max(math.hypot(p[0] + u * vx - x, p[1] + u * vy - y) - p[4], 0.0)
 
 
+def item_dist(it: Item, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    """Item.dist for arrays of points."""
+    p = it.par
+    if it.kind == 0:
+        dx, dy = X - p[0], Y - p[1]
+        if p[4]:
+            c, s = math.cos(p[4]), math.sin(p[4])
+            dx, dy = dx * c + dy * s, -dx * s + dy * c
+        r = p[5]
+        ex = np.maximum(np.abs(dx) - (p[2] - r), 0.0)
+        ey = np.maximum(np.abs(dy) - (p[3] - r), 0.0)
+        return np.maximum(np.hypot(ex, ey) - r, 0.0)
+    if it.kind == 1:
+        return np.maximum(np.hypot(X - p[0], Y - p[1]) - p[2], 0.0)
+    vx, vy = p[2] - p[0], p[3] - p[1]
+    L = vx * vx + vy * vy
+    u = np.zeros_like(X) if L == 0 else np.clip(((X - p[0]) * vx + (Y - p[1]) * vy) / L, 0.0, 1.0)
+    return np.maximum(np.hypot(p[0] + u * vx - X, p[1] + u * vy - Y) - p[4], 0.0)
+
+
 def _pad_items(fp: list, ref: str) -> list[Item]:
     at = child(fp, "at")
     fx, fy = float(at[1]) - ORIGIN[0], float(at[2]) - ORIGIN[1]
@@ -255,7 +279,7 @@ def _pad_items(fp: list, ref: str) -> list[Item]:
                 hole = (x, y, max(vals) / 2)
         if ptype == "np_thru_hole":
             r = max(sx, sy, 2 * hole[2]) / 2
-            out.append(Item(1, (x, y, r), TOP | BOT, "", "npth", hole=(x, y, r), ref=ref))
+            out.append(Item(1, (x, y, r), TOP | BOT | IN2, "", "npth", hole=(x, y, r), ref=ref))
             continue
         if not layers:
             continue
@@ -677,6 +701,7 @@ def closest(cu: Copper, ga: list[int], gb: list[int]) -> tuple[float, tuple, tup
 
 PAIR_RANK = {"MIPI_100": 0, "USB_90": 1, "ETH_100": 2}    # fastest first (1.5 Gb/s, 480 Mb/s, 100 Mb/s)
 SOC_RANK = 2.5                     # any other connection that starts at a U1 pad
+LOCAL_MM = 2.5                     # connections this short are fan-out, routed before anything else
 
 
 def priority(net: str) -> int:
@@ -693,6 +718,24 @@ def priority(net: str) -> int:
     if is_supply(net):
         return 5
     return 7
+
+
+def in2_ok(net: str) -> bool:
+    """May the net use In2.Cu? Espressif: power traces on the inner (power) layer, and
+    signals there too if needed; the differential pairs stay on F.Cu over the GND plane
+    and the plane nets use their planes."""
+    return not partner(net) and net not in PLANE_NETS
+
+
+def rip_rank(c: "Conn") -> float:
+    """Who may rip up whom: differential pairs by their rank, everything else is equal
+    (the routing order puts the SoC's connections first, but a short local connection
+    they wall off must be able to push them aside)."""
+    return PAIR_RANK[netclass(c.net)] if partner(c.net) else 3
+
+
+def may_rip(by: "Conn", victim: "Conn") -> bool:
+    return rip_rank(victim) >= rip_rank(by) and victim.rips < MAX_RIPS
 
 
 def net_connections(cu: Copper, net: str, next_id) -> list[Conn]:
@@ -821,7 +864,7 @@ class Router:
         corner = r - np.hypot(X - cx, Y - cy)
         straight = np.minimum(np.minimum(X - x0, x1 - X), np.minimum(Y - y0, y1 - Y))
         self.edge = np.where((np.abs(X - cx) > 1e-9) & (np.abs(Y - cy) > 1e-9), corner, straight).astype(np.float32)
-        self.hist = np.zeros((2, self.NX, self.NY), np.float32)
+        self.hist = np.zeros((NL, self.NX, self.NY), np.float32)
         tv = bs.THERMAL_VIA                  # bottom solder-mask window over the thermal vias
         h = (tv["grid"] - 1) / 2 * tv["pitch_mm"] + tv["pad_mm"] / 2
         self.cu.add(Item(0, (0.0, 0.0, h, h, 0.0, 0.0), BOT, bs.GND, "keepout"))
@@ -860,7 +903,7 @@ class Router:
         other = sel[~is_own]
         mine = sel[is_own]
         N = w.nx * w.ny
-        obs = np.full((2, NCLS, 2, N), 1e9, np.float32)
+        obs = np.full((2, NCLS, NL, N), 1e9, np.float32)
         holes = np.full(N, 1e9, np.float32)
         cls = cu.cls[other].copy()
         cls[cu.net[other] == pid] = PARTNER
@@ -868,28 +911,28 @@ class Router:
         lib = core()
         lib.fields(len(other), cu.kind[other], cu.lay[other], cls, grp,
                    np.ascontiguousarray(cu.par[other]), np.ascontiguousarray(cu.box[other]),
-                   np.ascontiguousarray(cu.hole[other]), w.x0, w.y0, w.g, w.nx, w.ny, reach, NCLS,
+                   np.ascontiguousarray(cu.hole[other]), w.x0, w.y0, w.g, w.nx, w.ny, reach, NCLS, NL,
                    obs.reshape(-1), holes)
-        ownf = np.full((1, 1, 2, N), 1e9, np.float32)
+        ownf = np.full((1, 1, NL, N), 1e9, np.float32)
         lib.fields(len(mine), cu.kind[mine], cu.lay[mine], np.zeros(len(mine), np.int32),
                    np.zeros(len(mine), np.int32), np.ascontiguousarray(cu.par[mine]),
                    np.ascontiguousarray(cu.box[mine]), np.ascontiguousarray(cu.hole[mine]),
-                   w.x0, w.y0, w.g, w.nx, w.ny, 0.05, 1, ownf.reshape(-1), holes)
+                   w.x0, w.y0, w.g, w.nx, w.ny, 0.05, 1, NL, ownf.reshape(-1), holes)
         shp = (w.nx, w.ny)
-        return obs.reshape(2, NCLS, 2, *shp), ownf.reshape(2, *shp), holes.reshape(shp)
+        return obs.reshape(2, NCLS, NL, *shp), ownf.reshape(NL, *shp), holes.reshape(shp)
 
     def group_field(self, w: Window, group: list[int]) -> np.ndarray:
         """Distance to the copper of one island (per layer)."""
         cu = self.cu
         g = np.array([k for k in group if cu.alive[k]], np.int64)
-        f = np.full((1, 1, 2, w.nx * w.ny), 1e9, np.float32)
+        f = np.full((1, 1, NL, w.nx * w.ny), 1e9, np.float32)
         holes = np.full(w.nx * w.ny, 1e9, np.float32)
         if len(g):
             core().fields(len(g), cu.kind[g], cu.lay[g], np.zeros(len(g), np.int32), np.zeros(len(g), np.int32),
                           np.ascontiguousarray(cu.par[g]), np.ascontiguousarray(cu.box[g]),
-                          np.ascontiguousarray(cu.hole[g]), w.x0, w.y0, w.g, w.nx, w.ny, 0.05, 1,
+                          np.ascontiguousarray(cu.hole[g]), w.x0, w.y0, w.g, w.nx, w.ny, 0.05, 1, NL,
                           f.reshape(-1), holes)
-        return f.reshape(2, w.nx, w.ny)
+        return f.reshape(NL, w.nx, w.ny)
 
     def need(self, net: str, half: float, margin: float = MARGIN_MM, breakout: bool = False) -> list[float]:
         """Centre distance a shape of half-size ``half`` of ``net`` keeps per obstacle class
@@ -911,12 +954,13 @@ class Router:
         X, Y = w.mesh()
         out = self.poly_mask(w, self.necks)
         out[0] |= (np.abs(X) < BREAKOUT_HALF) & (np.abs(Y) < BREAKOUT_HALF)
+        out[2] = False                       # the DRU areas and courtyards are outer-layer only
         return out
 
     def poly_mask(self, w: Window, polys) -> np.ndarray:
         """Per layer: cells inside any of the (layer bits, outline segments) polygons."""
         X, Y = w.mesh()
-        out = np.zeros((2, w.nx, w.ny), bool)
+        out = np.zeros((NL, w.nx, w.ny), bool)
         x1, y1 = w.x0 + (w.nx - 1) * w.g, w.y0 + (w.ny - 1) * w.g
         for bits, segs in polys:
             bx0, by0 = segs[:, [0, 2]].min(), segs[:, [1, 3]].min()
@@ -932,7 +976,7 @@ class Router:
                     continue
                 c = ((ya > Ys) != (yb > Ys)) & (Xs < (xb - xa) * (Ys - ya) / (yb - ya) + xa)
                 inside ^= c
-            for L in (0, 1):
+            for L in range(NL):
                 if bits >> L & 1:
                     out[L, i0:i1, j0:j1] |= inside
         return out
@@ -943,7 +987,7 @@ class Router:
         bo = self.breakout(w)
         inside_ko = self.poly_mask(w, self.keepouts)
         fixed, routed = [], []
-        for L in (0, 1):
+        for L in range(NL):
             maps = []
             for brk in ((False, True) if bo[L].any() else (False,)):
                 nd = self.need(net, half, margin, brk)
@@ -963,10 +1007,11 @@ class Router:
         return fixed, routed
 
     def via_maps(self, w: Window, obs, holes, net: str, diameter: float, drill: float, layers: tuple):
+        """Cells where a via with copper on ``layers`` fits: (w.r.t. fixed copper, routed copper)."""
         f, r = self.free_maps(w, obs, net, diameter / 2)
         hf = holes >= drill / 2 + HOLE_TO_HOLE + MARGIN_MM
         vko = self.poly_mask(w, self.via_keepouts)      # includes U1_EPAD_VIAS (thermal vias only)
-        hf &= ~(vko[0] | vko[1])
+        hf &= ~vko.any(axis=0)
         vf = hf.copy()
         vr = np.ones_like(hf)
         for L in layers:
@@ -976,54 +1021,69 @@ class Router:
 
     # ------------------------------------------------------------------ search
     @staticmethod
-    def reachable(free: np.ndarray, via: np.ndarray, src: np.ndarray, dst: np.ndarray) -> tuple[bool, bool]:
+    def reachable(free: np.ndarray, vias, src: np.ndarray, dst: np.ndarray) -> tuple[bool, bool]:
         """Cheap necessary condition for a path: src and dst in one 8-connected region of
         free cells (layers joined where a via may stand). Saves the full A* on hopeless
         connections, which would explore the whole window. Returns (connected, the source
         region reaches the window border)."""
         from scipy import ndimage
         st = np.ones((3, 3), bool)
-        lab0, n0 = ndimage.label(free[0], structure=st)
-        lab1, n1 = ndimage.label(free[1], structure=st)
-        lab1 = np.where(lab1 > 0, lab1 + n0, 0)
-        parent = np.arange(n0 + n1 + 1)
+        labs, off = [], 0
+        for L in range(len(free)):
+            lab, n = ndimage.label(free[L], structure=st)
+            labs.append(np.where(lab > 0, lab + off, 0))
+            off += n
+        parent = np.arange(off + 1)
 
         def find(x):
             while parent[x] != x:
                 parent[x] = parent[parent[x]]
                 x = parent[x]
             return x
-        both = via & (lab0 > 0) & (lab1 > 0)
-        for a, b in set(zip(lab0[both].tolist(), lab1[both].tolist())):
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[rb] = ra
+        for bits, mask, _ in vias:
+            ls = [L for L in range(len(free)) if bits >> L & 1]
+            for a_l, b_l in zip(ls, ls[1:]):
+                both = mask & (labs[a_l] > 0) & (labs[b_l] > 0)
+                for a, b in set(zip(labs[a_l][both].tolist(), labs[b_l][both].tolist())):
+                    ra, rb = find(a), find(b)
+                    if ra != rb:
+                        parent[rb] = ra
         roots = np.array([find(x) for x in range(len(parent))])
         roots[0] = -1
-        s_roots = set(roots[lab0[src[0]]].tolist()) | set(roots[lab1[src[1]]].tolist())
-        d_roots = set(roots[lab0[dst[0]]].tolist()) | set(roots[lab1[dst[1]]].tolist())
-        s_roots.discard(-1)
+
+        def roots_of(mask3):
+            out = set()
+            for L in range(len(free)):
+                out |= set(roots[labs[L][mask3[L]]].tolist())
+            out.discard(-1)
+            return out
+        s_roots, d_roots = roots_of(src), roots_of(dst)
         if s_roots & d_roots:
             return True, True
         edge = np.zeros(free.shape[1:], bool)
         edge[0, :] = edge[-1, :] = edge[:, 0] = edge[:, -1] = True
-        b_roots = set(roots[lab0[edge]].tolist()) | set(roots[lab1[edge]].tolist())
-        return False, bool(s_roots & b_roots)
+        return False, bool(s_roots & roots_of(np.stack([edge] * len(free))))
 
-    def search(self, w: Window, cost: np.ndarray, via: np.ndarray, src: np.ndarray, dst: np.ndarray,
-               turn90: float = TURN90, via_cost: float = VIA_COST, turn45: float = TURN45):
+    def search(self, w: Window, cost: np.ndarray, vias, src: np.ndarray, dst: np.ndarray,
+               turn90: float = TURN90, turn45: float = TURN45):
+        """A* over the window; ``vias``: [(layer bits, cell mask, cost)] layer changes."""
         if not src.any() or not dst.any():
             return None
-        ok, border = self.reachable(cost >= 0, via, src, dst)
+        ok, border = self.reachable(cost >= 0, vias, src, dst)
         if not ok:
             self.enclosed = not border
             return None
-        ii, jj = np.nonzero(dst[0] | dst[1])
+        ii, jj = np.nonzero(dst.any(axis=0))
         tbox = np.array([ii.min(), jj.min(), ii.max(), jj.max()], np.int32)
         max_path = 4 * (w.nx + w.ny) * 4
         path = np.zeros(3 * max_path, np.int32)
-        n = core().astar(w.nx, w.ny, np.ascontiguousarray(cost, np.float32).reshape(-1),
-                         np.ascontiguousarray(via, np.uint8).reshape(-1), via_cost,
+        nvk = len(vias)
+        vlay = np.array([b for b, _, _ in vias] or [0], np.int32)
+        vmask = np.ascontiguousarray(np.stack([m for _, m, _ in vias]) if vias else
+                                     np.zeros((1, w.nx, w.ny), bool), np.uint8).reshape(-1)
+        vcost = np.array([c for _, _, c in vias] or [0.0], np.float32)
+        n = core().astar(len(cost), w.nx, w.ny, np.ascontiguousarray(cost, np.float32).reshape(-1),
+                         nvk, vlay, vmask, vcost,
                          np.ascontiguousarray(src, np.uint8).reshape(-1),
                          np.ascontiguousarray(dst, np.uint8).reshape(-1), tbox,
                          turn45, turn90, 60_000_000, path, max_path)
@@ -1032,9 +1092,10 @@ class Router:
             return None
         return path[:3 * n].reshape(n, 3)
 
-    def geometry(self, w: Window, path: np.ndarray, narrow=None):
-        """Grid path -> straight runs per layer ((layer, (x0, y0), (x1, y1), narrow)) and via
-        cells. ``narrow[k]``: path cell k only has room for the neck-down width."""
+    def geometry(self, w: Window, path: np.ndarray, narrow=None, micro=None):
+        """Grid path -> straight runs per layer ((layer, (x0, y0), (x1, y1), narrow)) and vias
+        (i, j, kind). ``narrow[k]``: path cell k only has room for the neck-down width;
+        ``micro``: cells where an L4-L3 laser microvia may take a B.Cu <-> In2.Cu change."""
         segs, vias = [], []
         k = 0
         n = len(path)
@@ -1043,8 +1104,14 @@ class Router:
             L, i, j = path[k]
             L2, i2, j2 = path[k + 1]
             if L2 != L:
-                vias.append((i, j))
-                k += 1
+                visited = {int(L)}
+                m = k
+                while m + 1 < n and path[m + 1][1] == i and path[m + 1][2] == j:
+                    m += 1
+                    visited.add(int(path[m][0]))
+                kind = "micro_bottom" if (visited <= {1, 2} and micro is not None and micro[i, j]) else "through"
+                vias.append((i, j, kind))
+                k = m
                 continue
             d = (i2 - i, j2 - j)
             flag = nar[k] or nar[k + 1]
@@ -1063,18 +1130,18 @@ class Router:
         for seg in segs:
             L, a, b = seg[:3]
             wd = neck if (len(seg) > 3 and seg[3] and neck) else width
-            it = Item(2, (a[0], a[1], b[0], b[1], wd / 2), TOP if L == 0 else BOT, conn.net, "track",
+            it = Item(2, (a[0], a[1], b[0], b[1], wd / 2), 1 << L, conn.net, "track",
                       fixed=False, conn=conn.id, width=wd)
             conn.items.append(cu.add(it))
         for x, y, kind in vias:
             if kind == "through":
-                it = Item(1, (x, y, VIA[0] / 2), TOP | BOT, conn.net, "via", hole=(x, y, VIA[1] / 2),
+                it = Item(1, (x, y, VIA[0] / 2), TOP | BOT | IN2, conn.net, "via", hole=(x, y, VIA[1] / 2),
                           fixed=False, conn=conn.id, planes="12")
             elif kind == "micro_top":
                 it = Item(1, (x, y, MICRO[0] / 2), TOP, conn.net, "micro", hole=(x, y, MICRO[1] / 2),
                           fixed=False, conn=conn.id, planes="1")
             else:
-                it = Item(1, (x, y, MICRO[0] / 2), BOT, conn.net, "micro", hole=(x, y, MICRO[1] / 2),
+                it = Item(1, (x, y, MICRO[0] / 2), BOT | IN2, conn.net, "micro", hole=(x, y, MICRO[1] / 2),
                           fixed=False, conn=conn.id, planes="2")
             conn.items.append(cu.add(it))
         conn.done = True
@@ -1094,31 +1161,31 @@ class Router:
         own = own or {conn.net}
         box = (w.x0, w.y0, w.x0 + (w.nx - 1) * w.g, w.y0 + (w.ny - 1) * w.g)
         sel = [k for k in cu.select(box, 1.0) if not cu.fixed[k] and cu.items[k].net not in own]
-        pts = [(int(L), *w.xy(i, j)) for L, i, j in path]
-        vpts = [w.xy(i, j) for i, j in vias]
+        P = np.array([(L, *w.xy(i, j)) for L, i, j in path], float).reshape(-1, 3)
+        V = np.array([w.xy(i, j) for i, j in vias], float).reshape(-1, 2)
         out = set()
         nd = self.need(conn.net, half)
         nv = self.need(conn.net, via_half)
         pn = partner(conn.net)
         for k in sel:
             it = cu.items[k]
+            if it.conn in out:
+                continue
             ci = PARTNER if it.net == pn else cu.cls[k]
-            lim = nd[ci]
-            bb = it.bbox()
-            for L, x, y in pts:
-                if not (it.layers >> L) & 1:
-                    continue
-                if x < bb[0] - lim or x > bb[2] + lim or y < bb[1] - lim or y > bb[3] + lim:
-                    continue
-                if it.dist(x, y) < lim:
+            on = np.zeros(len(P), bool)
+            for L in range(NL):
+                if (it.layers >> L) & 1:
+                    on |= P[:, 0] == L
+            if on.any() and (item_dist(it, P[on, 1], P[on, 2]) < nd[ci]).any():
+                out.add(it.conn)
+                continue
+            if len(V):
+                hit = item_dist(it, V[:, 0], V[:, 1]) < nv[ci]
+                if it.hole[2]:
+                    hit |= np.hypot(V[:, 0] - it.hole[0], V[:, 1] - it.hole[1]) < \
+                        it.hole[2] + VIA[1] / 2 + HOLE_TO_HOLE + MARGIN_MM
+                if hit.any():
                     out.add(it.conn)
-                    break
-            else:
-                for x, y in vpts:
-                    if it.dist(x, y) < nv[ci] or (it.hole[2] and math.hypot(x - it.hole[0], y - it.hole[1])
-                                                   < it.hole[2] + VIA[1] / 2 + HOLE_TO_HOLE + MARGIN_MM):
-                        out.add(it.conn)
-                        break
         return out
 
     # ------------------------------------------------------------------ one connection
@@ -1126,9 +1193,9 @@ class Router:
         """Cells where a via into the net's plane fits (GND: microvia on top, through via
         on the bottom; +3V3: through via on top, microvia on the bottom)."""
         X, Y = w.mesh()
-        vt, vtr = self.via_maps(w, obs, holes, net, VIA[0], VIA[1], (0, 1))
+        vt, vtr = self.via_maps(w, obs, holes, net, VIA[0], VIA[1], (0, 1, 2))
         m_top, m_top_r = self.via_maps(w, obs, holes, net, MICRO[0], MICRO[1], (0,))
-        m_bot, m_bot_r = self.via_maps(w, obs, holes, net, MICRO[0], MICRO[1], (1,))
+        m_bot, m_bot_r = self.via_maps(w, obs, holes, net, MICRO[0], MICRO[1], (1, 2))
         if rip:
             vtr, m_top_r, m_bot_r = (np.ones_like(vtr),) * 3
         a = np.maximum(np.abs(X), np.abs(Y))
@@ -1140,9 +1207,9 @@ class Router:
             region = a > PLUS_3V3_KEEP_HALF
             top, bot = vt & vtr, m_bot & m_bot_r
             kinds = ("through", "micro_bottom")
-        return np.stack([top & region & free[0], bot & region & free[1]]), kinds
+        return np.stack([top & region & free[0], bot & region & free[1], np.zeros_like(top)]), kinds
 
-    def route(self, conn: Conn, allow_rip: bool = False, layers=(0, 1), no_vias: bool = False,
+    def route(self, conn: Conn, allow_rip: bool = False, layers=(0, 1, 2), no_vias: bool = False,
               width_list=None, target=None) -> bool:
         """Route one connection in growing windows: first the narrowest track the net may use
         (necked down at fine-pitch pins if needed), then the widest that fits the same way.
@@ -1152,8 +1219,9 @@ class Router:
         net = conn.net
         wl = width_list or widths(net)
         neck = neck_width(net) if target is None else None
-        opts = dict(layers=layers, no_vias=no_vias or net.startswith("XTAL"),   # Espressif: no vias
-                    target=target)                                              # on the crystal
+        # Espressif: no vias on the crystal traces -- unless the placement makes the two cross
+        xtal_retry = net.startswith("XTAL") and not no_vias and target is None
+        opts = dict(layers=layers, no_vias=no_vias or net.startswith("XTAL"), target=target)
         if allow_rip:
             ctx = self._context(conn, WINDOWS_MM[-1], wl, target)
             plan = self._attempt(conn, ctx, wl[-1], neck, True, **opts)
@@ -1177,6 +1245,19 @@ class Router:
                     plan = better
                     break
             return self._apply(conn, plan)
+        if xtal_retry:
+            ok = self._route_xtal_with_vias(conn, wl)
+            if ok:
+                conn.note += " (crossing: vias on the crystal net)"
+            return ok
+        return False
+
+    def _route_xtal_with_vias(self, conn: Conn, wl) -> bool:
+        for pad in WINDOWS_MM:
+            ctx = self._context(conn, pad, wl, None)
+            plan = self._attempt(conn, ctx, wl[-1], None, False)
+            if plan is not None:
+                return self._apply(conn, plan)
         return False
 
     def _context(self, conn: Conn, pad: float, wl, target):
@@ -1186,13 +1267,17 @@ class Router:
         obs, _, holes = self.fields(w, {conn.net}, partner(conn.net), reach)
         fa = self.group_field(w, conn.a)
         fb = self.group_field(w, conn.b) if conn.b is not None else None
+        if conn.b is None and target is None:            # plane pad: its plane's copper counts too
+            groups, plane = self.islands(conn.net)
+            if plane is not None:
+                fb = self.group_field(w, groups[plane])
         return w, obs, holes, fa, fb
 
     def _via_in_pad(self, conn: Conn, ctx, wd: float) -> bool:
         """Plane connection: a via that fits in the pad itself needs no track."""
         w, obs, holes, fa, fb = ctx
         fixed, routed = self.free_maps(w, obs, conn.net, wd / 2)
-        free = [fixed[L] & routed[L] for L in (0, 1)]
+        free = [fixed[L] & routed[L] for L in range(NL)]
         pt, kinds = self.plane_targets(w, obs, holes, conn.net, free)
         inpad = pt & (fa <= 0)
         if not inpad.any():
@@ -1202,28 +1287,28 @@ class Router:
         conn.note = "via in pad"
         return True
 
-    def _attempt(self, conn: Conn, ctx, wd: float, nk, rip: bool, layers=(0, 1), no_vias=False, target=None):
+    def _attempt(self, conn: Conn, ctx, wd: float, nk, rip: bool, layers=(0, 1, 2), no_vias=False, target=None):
         """One search; returns a plan (segments, vias, victims, width, neck) or None."""
         w, obs, holes, fa, fb = ctx
         net = conn.net
         pn = partner(net)
         plane = conn.b is None and target is None
         self.enclosed = False
+        layers = [L for L in layers if L != 2 or in2_ok(net)]
         fixed, routed = self.free_maps(w, obs, net, wd / 2)
-        vf, vr = self.via_maps(w, obs, holes, net, VIA[0], VIA[1], (0, 1))
-        wide = [fixed[L] & (routed[L] if not rip else True) for L in (0, 1)]
+        vf, vr = self.via_maps(w, obs, holes, net, VIA[0], VIA[1], (0, 1, 2))
+        wide = [fixed[L] & (routed[L] if not rip else True) for L in range(NL)]
         if nk:                       # neck down to ``nk`` within NECK_MM of the two terminals
             fn, rn = self.free_maps(w, obs, net, nk / 2)
-            near = [(fa[L] <= NECK_MM) | ((fb[L] <= NECK_MM) if fb is not None else False) for L in (0, 1)]
-            fixed = [fixed[L] | (fn[L] & near[L]) for L in (0, 1)]
-            routed = [routed[L] | (rn[L] & near[L]) for L in (0, 1)]
-        free = list(fixed) if rip else [fixed[L] & routed[L] for L in (0, 1)]
-        via_ok = vf if rip else vf & vr
-        for L in (0, 1):
+            near = [(fa[L] <= NECK_MM) | ((fb[L] <= NECK_MM) if fb is not None else False) for L in range(NL)]
+            fixed = [fixed[L] | (fn[L] & near[L]) for L in range(NL)]
+            routed = [routed[L] | (rn[L] & near[L]) for L in range(NL)]
+        free = list(fixed) if rip else [fixed[L] & routed[L] for L in range(NL)]
+        for L in range(NL):
             if L not in layers:
                 free[L] = np.zeros_like(free[L])
-        src = np.stack([(fa[L] <= 0) & free[L] for L in (0, 1)])
-        dst = np.stack([(fb[L] <= 0) & free[L] for L in (0, 1)]) if fb is not None else np.zeros_like(src)
+        src = np.stack([(fa[L] <= 0) & free[L] for L in range(NL)])
+        dst = np.stack([(fb[L] <= 0) & free[L] for L in range(NL)]) if fb is not None else np.zeros_like(src)
         kinds = None
         if plane:
             pt, kinds = self.plane_targets(w, obs, holes, net, free, rip)
@@ -1236,27 +1321,38 @@ class Router:
         cost = np.where(np.stack(free), hist, -1.0).astype(np.float32)
         if pn or netclass(net) == "SE_50":        # high-speed: F.Cu over the GND plane
             cost[1] = np.where(cost[1] >= 0, cost[1] + 0.3, cost[1])
+        cost[2] = np.where(cost[2] >= 0, cost[2] + IN2_COST, cost[2])
         if rip:
-            clean = np.stack([routed[0], routed[1]])
+            clean = np.stack(routed)
             cost = np.where((cost >= 0) & ~clean, cost + RIP_COST, cost)
         via_cost = VIA_COST * (4 if pn else 3 if netclass(net) == "SE_50" else 1)
-        path = self.search(w, cost, np.zeros_like(via_ok) if no_vias else via_ok, src, dst, via_cost=via_cost)
+        vias = []
+        micro = None
+        if not no_vias:
+            through_bits = sum(1 << L for L in layers)
+            vias.append((through_bits, vf if rip else vf & vr, via_cost))
+            if 2 in layers:          # L4 -> L3 laser microvia between B.Cu and In2.Cu
+                mf, mr = self.via_maps(w, obs, holes, net, MICRO[0], MICRO[1], (1, 2))
+                micro = mf if rip else mf & mr
+                vias.append((BOT | IN2, micro, via_cost * 0.6))
+        path = self.search(w, cost, vias, src, dst)
         if path is None:
             return None
         narrow = [not wide[L][i, j] for L, i, j in path] if nk else None
-        segs, vcells = self.geometry(w, path, narrow)
-        vias = [(*w.xy(i, j), "through") for i, j in vcells]
+        segs, vcells = self.geometry(w, path, narrow, micro)
+        vias_out = [(*w.xy(i, j), kind) for i, j, kind in vcells]
         L, i, j = path[-1]
         if plane and not (fb is not None and fb[L][i, j] <= 0):
-            vias.append((*w.xy(i, j), kinds[L]))
+            vias_out.append((*w.xy(i, j), kinds[L]))
         victims = []
         if rip:
-            vic = self.victims(w, conn, path, wd / 2, vcells + ([(i, j)] if plane else []), VIA[0] / 2)
+            vic = self.victims(w, conn, path, wd / 2, [(i_, j_) for i_, j_, _ in vcells] + ([(i, j)] if plane else []),
+                               VIA[0] / 2)
             vic.discard(-1)
             victims = [self.by_id[v] for v in vic if v in self.by_id]
-            if any(b.prio < conn.prio or b.rips >= MAX_RIPS for b in victims):
+            if any(not may_rip(conn, b) for b in victims):
                 return None
-        return segs, vias, victims, wd, nk, bool(narrow and any(narrow))
+        return segs, vias_out, victims, wd, nk, bool(narrow and any(narrow))
 
     def _apply(self, conn: Conn, plan) -> bool:
         segs, vias, victims, wd, nk, necked = plan
@@ -1293,7 +1389,7 @@ class Router:
         else:
             d = np.hypot(X - p[0], Y - p[1]) - (p[2] if it.kind == 1 else max(p[2], p[3]))
         near = d <= pad
-        for L in (0, 1):
+        for L in range(NL):
             if (it.layers >> L) & 1:
                 self.hist[L, i0:i1 + 1, j0:j1 + 1] += np.where(near, HISTORY_STEP / 10, 0).astype(np.float32)
 
@@ -1333,8 +1429,9 @@ class Router:
                 X, Y = w.mesh()
                 ra = launch + math.dist(cp.ta, cn.ta) / 2
                 rb = launch + math.dist(cp.tb, cn.tb) / 2
-                src = np.stack([free0 & (np.hypot(X - ma[0], Y - ma[1]) <= ra), np.zeros_like(free0)])
-                dst = np.stack([free0 & (np.hypot(X - mb[0], Y - mb[1]) <= rb), np.zeros_like(free0)])
+                z = np.zeros_like(free0)
+                src = np.stack([free0 & (np.hypot(X - ma[0], Y - ma[1]) <= ra), z, z])
+                dst = np.stack([free0 & (np.hypot(X - mb[0], Y - mb[1]) <= rb), z, z])
                 if not src.any() or not dst.any():
                     why.append(f"no launch room at the {'A' if not src.any() else 'B'} end (r {launch})")
                     continue
@@ -1342,10 +1439,10 @@ class Router:
                     why.append("launch regions overlap")
                     continue
                 hist = self.hist[:, w.i0:w.i0 + w.nx, w.j0:w.j0 + w.ny]
-                cost = np.where(np.stack([free0, np.zeros_like(free0)]), hist, -1.0).astype(np.float32)
+                cost = np.where(np.stack([free0, z, z]), hist, -1.0).astype(np.float32)
                 if rip:
                     cost[0] = np.where((cost[0] >= 0) & ~routed[0], cost[0] + RIP_COST, cost[0])
-                path = self.search(w, cost, np.zeros_like(free0), src, dst, turn90=-1.0, turn45=8.0)
+                path = self.search(w, cost, [], src, dst, turn90=-1.0, turn45=8.0)
                 if path is None:
                     why.append(f"no coupled path (window {pad} mm)")
                     continue
@@ -1360,7 +1457,7 @@ class Router:
                     vic = self.victims(w, cp, path, half, [], half, own={cp.net, cn.net})
                     vic.discard(-1)
                     victims = [self.by_id[v] for v in vic if v in self.by_id]
-                    if not victims or any(v.prio < cp.prio or v.rips >= MAX_RIPS for v in victims):
+                    if not victims or any(not may_rip(cp, v) for v in victims):
                         why.append("rip-up refused")
                         continue
                     for v in victims:
@@ -1394,7 +1491,7 @@ class Router:
                     def tgt(w2, free, end=end):
                         X2, Y2 = w2.mesh()
                         m = (np.hypot(X2 - end[0], Y2 - end[1]) <= wd * 0.45) & free[0]
-                        return np.stack([m, np.zeros_like(m)])
+                        return np.stack([m, np.zeros_like(m), np.zeros_like(m)])
                     cross_under = swapped and not first and c is cn
                     if not self.route(fc, layers=(0, 1) if cross_under else (0,), no_vias=not cross_under,
                                       target=(end, tgt), width_list=(wd,)):
@@ -1455,10 +1552,19 @@ class Router:
         pairs = {c.id: self.by_id[c.pair] for c in self.conns if c.pair >= 0 and c.net.endswith("_P")}
         self.log(f"{len(pairs)} differential-pair connections routed coupled first")
         t0 = time.time()
+        # Fan-out first (usual practice): the pin-to-neighbour connections of the fine-pitch
+        # parts and every plane pad's via. They have no alternative route; long connections do.
+        local = [c for c in self.conns if c.b is None or c.length <= LOCAL_MM]
+        for c in sorted(local, key=lambda c: (c.length, c.prio)):
+            if not c.done:
+                self.route(c)
+        self.log(f"  fan-out: {sum(c.done for c in local)} of {len(local)} local connections")
         # U1 pads whose escape track the planner could not fit end at a bare stub inside the
         # breakout: route those connections first, while the breakout still has room.
         bare = [c for c in self.conns if self._bare_stub(c.a) or (c.b is not None and self._bare_stub(c.b))]
         for c in sorted(bare, key=lambda c: (c.prio, c.length)):
+            if c.done:
+                continue
             ok = self.route(c) or self.route(c, allow_rip=True)
             self.log(f"  SoC stub {c.net}: {c.note if ok else 'not yet'}")
         self.ripped_pairs: list[Conn] = []
@@ -1634,7 +1740,7 @@ def sexpr_items(cu: Copper) -> list[str]:
             x0, y0, x1, y1, r = it.par[:5]
             if math.hypot(x1 - x0, y1 - y0) < 1e-6:
                 continue
-            L = 0 if it.layers & TOP else 1
+            L = 0 if it.layers & TOP else (1 if it.layers & BOT else 2)
             key = f"{it.net}:{L}:{x0:.4f},{y0:.4f}:{x1:.4f},{y1:.4f}"
             out.append(f'\t(segment\n\t\t(start {x0 + ox:.4f} {y0 + oy:.4f})\n\t\t(end {x1 + ox:.4f} {y1 + oy:.4f})\n'
                        f'\t\t(width {2 * r:.4g})\n\t\t(layer "{LAYER_NAMES[L]}")\n\t\t(net "{it.net}")\n'
@@ -1797,7 +1903,7 @@ def return_vias(r: Router) -> int:
         x, y = cu.items[k].par[:2]
         w = r.window([(x, y)], RETURN_VIA_MM[1] + 0.5)
         obs, _, holes = r.fields(w, {bs.GND}, None, VIA[0] + max(CLASSES) + 0.1)
-        vf, vr = r.via_maps(w, obs, holes, bs.GND, VIA[0], VIA[1], (0, 1))
+        vf, vr = r.via_maps(w, obs, holes, bs.GND, VIA[0], VIA[1], (0, 1, 2))
         X, Y = w.mesh()
         d = np.hypot(X - x, Y - y)
         ok = vf & vr & (d >= RETURN_VIA_MM[0]) & (d <= RETURN_VIA_MM[1])
@@ -1880,7 +1986,8 @@ def repair(r: Router, report: dict) -> tuple[int, int]:
             desc = item.get("description", "")
             m = _BRACKET.search(desc)
             if m:
-                bits = (TOP if "Signal_Top" in desc else 0) | (BOT if "Signal_Bottom" in desc else 0)
+                bits = (TOP if "Signal_Top" in desc else 0) | (BOT if "Signal_Bottom" in desc else 0) | \
+                    (IN2 if "VCC_3V3" in desc else 0)
                 if desc.startswith("PTH") or not bits:
                     bits = TOP | BOT
                 ends.append((m.group(1), (item["pos"]["x"] - ORIGIN[0], item["pos"]["y"] - ORIGIN[1]), bits))

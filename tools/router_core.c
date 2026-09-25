@@ -47,13 +47,13 @@ static double shape_dist(int kind, const double *p, double x, double y)
     return d > 0 ? d : 0;
 }
 
-/* out: ngrp * ncls * 2 layers * nx * ny floats (caller fills with a large value)
+/* out: ngrp * ncls * nl layers * nx * ny floats (caller fills with a large value)
  * hole_out: nx * ny floats, distance to the nearest hole edge (all nets)
  * bbox: 4 doubles per shape (x0 y0 x1 y1) */
 void fields(int ns, const int *kind, const int *layers, const int *cls, const int *grp,
             const double *par, const double *bbox, const double *hole,
             double wx0, double wy0, double g, int nx, int ny, double reach,
-            int ncls, float *out, float *hole_out)
+            int ncls, int nl, float *out, float *hole_out)
 {
     size_t N = (size_t)nx * ny;
     for (int s = 0; s < ns; s++) {
@@ -77,9 +77,9 @@ void fields(int ns, const int *kind, const int *layers, const int *cls, const in
                 }
                 if (layers[s] == 0 || cls[s] < 0) continue;
                 float d = (float)shape_dist(kind[s], p, x, y);
-                for (int L = 0; L < 2; L++) {
+                for (int L = 0; L < nl; L++) {
                     if (!(layers[s] & (1 << L))) continue;
-                    float *f = out + (((size_t)grp[s] * ncls + cls[s]) * 2 + L) * N;
+                    float *f = out + (((size_t)grp[s] * ncls + cls[s]) * nl + L) * N;
                     if (d < f[c]) f[c] = d;
                 }
             }
@@ -133,19 +133,20 @@ static node hpop(heap *h)
     return top;
 }
 
-/* cost: 2 * nx * ny, extra cost per unit length entering a cell (< 0 = blocked)
- * via: nx * ny, 1 = a via may stand here (both layers must be passable too)
- * src / dst: 2 * nx * ny flags; tbox: target bounding box i0 j0 i1 j1 (heuristic)
+/* nl layers; cost: nl * nx * ny, extra cost per unit length entering a cell (< 0 = blocked)
+ * vias: nvk kinds of layer change; kind k joins the layers in vlay[k] (bit mask) at the
+ * cells where vmask[k * nx * ny + c] is set, for vcost[k]
+ * src / dst: nl * nx * ny flags; tbox: target bounding box i0 j0 i1 j1 (heuristic)
  * turn45 / turn90: bend costs (turn90 < 0 forbids right angles)
  * path: out, (layer, i, j) triples from source to target; returns their count,
  * 0 = no path (the search reached the window border), -3 = no path and the search never
  * reached the border (a bigger window cannot help), -1 = out of memory, -2 = path longer
  * than max_path */
-int astar(int nx, int ny, const float *cost, const uint8_t *via, float via_cost,
-          const uint8_t *src, const uint8_t *dst, const int *tbox,
+int astar(int nl, int nx, int ny, const float *cost, int nvk, const int *vlay, const uint8_t *vmask,
+          const float *vcost, const uint8_t *src, const uint8_t *dst, const int *tbox,
           float turn45, float turn90, long max_expand, int *path, int max_path)
 {
-    size_t N = (size_t)nx * ny, S = 2 * N * 9;
+    size_t N = (size_t)nx * ny, S = (size_t)nl * N * 9;
     float *gs = malloc(S * sizeof(float));
     int32_t *par = malloc(S * sizeof(int32_t));
     heap h = {0};
@@ -157,7 +158,7 @@ int astar(int nx, int ny, const float *cost, const uint8_t *via, float via_cost,
                       int dy_ = (j) < tbox[1] ? tbox[1] - (j) : ((j) > tbox[3] ? (j) - tbox[3] : 0); \
                       int mn_ = dx_ < dy_ ? dx_ : dy_, mx_ = dx_ < dy_ ? dy_ : dx_; \
                       (float)(mx_ - mn_) + R2 * (float)mn_; })
-    for (int L = 0; L < 2; L++)
+    for (int L = 0; L < nl; L++)
         for (size_t c = 0; c < N; c++)
             if (src[L * N + c] && cost[L * N + c] >= 0) {
                 int32_t s = (int32_t)(((L * N + c) * 9) + 8);
@@ -209,10 +210,11 @@ int astar(int nx, int ny, const float *cost, const uint8_t *via, float via_cost,
                 if (hpush(&h, g2 + HEUR(i2, j2), s2)) { result = -1; goto done; }
             }
         }
-        if (via[c]) {
-            int L2 = 1 - L;
-            if (cost[L2 * N + c] >= 0) {
-                float g2 = g0 + via_cost;
+        for (int k = 0; k < nvk; k++) {
+            if (!(vlay[k] >> L & 1) || !vmask[(size_t)k * N + c]) continue;
+            for (int L2 = 0; L2 < nl; L2++) {
+                if (L2 == L || !(vlay[k] >> L2 & 1) || cost[L2 * N + c] < 0) continue;
+                float g2 = g0 + vcost[k];
                 int32_t s2 = (int32_t)((((size_t)L2 * N + c) * 9) + 8);
                 if (g2 < gs[s2]) {
                     gs[s2] = g2;

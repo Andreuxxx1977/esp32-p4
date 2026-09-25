@@ -98,3 +98,17 @@ def test_differential_pair_is_routed_coupled_at_its_gap():
     d = min(t.dist(*mid) for t in routed_tracks(router, n)) + w / 2
     assert abs(d - (w + r.pair_gap(p))) < 0.01
     assert gap <= r.pair_gap(p) <= gap + 0.01
+
+
+def test_supply_uses_in2_when_the_outer_layers_are_walled_off():
+    """A supply connection boxed in on F.Cu and B.Cu by other nets' copper goes down to
+    In2.Cu (the power layer, Espressif's place for power traces) and back up."""
+    wall = [r.Item(0, (X0 + 3, Y0, 0.3, 4.0, 0.0, 0.0), r.TOP | r.BOT, "GPIO9", "smd")]
+    items = [pad(0, 0, "VDDO_FLASH", 0.6, 0.6, layers=r.TOP | r.BOT | r.IN2),
+             pad(6, 0, "VDDO_FLASH", 0.6, 0.6, layers=r.TOP | r.BOT | r.IN2)] + wall
+    items[0].what = items[1].what = "tht"
+    router = r.Router(items, log=lambda *a: None)
+    router.run()
+    assert not router.failed
+    layers = {t.layers for t in routed_tracks(router, "VDDO_FLASH")}
+    assert r.IN2 in layers
