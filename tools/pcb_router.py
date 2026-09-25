@@ -529,6 +529,7 @@ class Copper:
         self.fixed = np.zeros(n, bool)
         self.by_net: dict[str, set[int]] = {}
         self.version: dict[str, int] = {}
+        self.in2_version = 0
         for it in items:
             self.add(it)
 
@@ -572,6 +573,8 @@ class Copper:
         if it.what not in ("npth", "keepout"):
             self.by_net.setdefault(it.net, set()).add(k)
             self.version[it.net] = self.version.get(it.net, 0) + 1
+        if it.layers & IN2:
+            self.in2_version += 1
         return k
 
     def remove(self, k: int) -> None:
@@ -579,6 +582,8 @@ class Copper:
         net = self.items[k].net
         self.by_net.get(net, set()).discard(k)
         self.version[net] = self.version.get(net, 0) + 1
+        if self.items[k].layers & IN2:
+            self.in2_version += 1
 
     def select(self, win: tuple, reach: float) -> np.ndarray:
         n = len(self.items)
@@ -1244,7 +1249,12 @@ class Router:
                 if better is not None:
                     plan = better
                     break
-            return self._apply(conn, plan)
+            if self._apply(conn, plan):
+                return True
+            # it would have split a plane on In2.Cu: try again on the outer layers only
+            plan = self._attempt(conn, ctx, wl[-1], neck, False, **{**opts, "layers": (0, 1)})
+            if plan is not None and self._apply(conn, plan):
+                return True
         if xtal_retry:
             ok = self._route_xtal_with_vias(conn, wl)
             if ok:
@@ -1354,8 +1364,82 @@ class Router:
                 return None
         return segs, vias_out, victims, wd, nk, bool(narrow and any(narrow))
 
+    # ------------------------------------------------------------------ plane integrity
+    PLANE_GRID = 0.1
+    ZONE_MIN_THICKNESS = 0.15
+
+    def plane_parts(self) -> dict[str, int]:
+        """In2.Cu carries the +3V3 plane and the VDD_HP island. Count, per plane, the pieces
+        its vias / pins end up in once the fill flows around the other nets' In2 copper
+        (conservative raster: zone clearance, half the minimum fill width, half a cell)."""
+        if getattr(self, "_parts_version", None) == self.cu.in2_version:
+            return self._parts
+        from scipy import ndimage
+        g = self.PLANE_GRID
+        if not hasattr(self, "_pX"):
+            x0, y0, x1, y1 = bs.BOARD_OUTLINE
+            xs = np.arange(x0, x1 + g / 2, g)
+            ys = np.arange(y0, y1 + g / 2, g)
+            self._pX, self._pY = np.meshgrid(xs, ys, indexing="ij")
+            inset = EDGE_MM + self.ZONE_MIN_THICKNESS / 2
+            a = np.maximum(np.abs(self._pX), np.abs(self._pY))
+            board = (self._pX > x0 + inset) & (self._pX < x1 - inset) & (self._pY > y0 + inset) & \
+                (self._pY < y1 - inset)
+            isl = lp.VDD_HP_ISLAND_HALF_MM
+            self._pregion = {"+3V3": board & (a > isl + lp.ZONE_CLEARANCE_MM + self.ZONE_MIN_THICKNESS / 2),
+                             "VDD_HP": a < isl - self.ZONE_MIN_THICKNESS / 2}
+        X, Y = self._pX, self._pY
+        cu = self.cu
+        n = len(cu.items)
+        idx = np.nonzero(cu.alive[:n] & ((cu.lay[:n] & IN2) > 0))[0]
+        out = {}
+        for plane, region in self._pregion.items():
+            blocked = np.zeros(X.shape, bool)
+            for k in idx:
+                it = cu.items[k]
+                if it.net == plane or it.what == "keepout":
+                    continue
+                c = max(lp.ZONE_CLEARANCE_MM, clearance(it.net) if it.what != "npth" else HOLE_CLEARANCE)
+                lim = c + self.ZONE_MIN_THICKNESS / 2 + g / 2
+                bx0, by0, bx1, by1 = it.bbox()
+                i0 = max(0, int((bx0 - lim - X[0, 0]) / g))
+                i1 = min(X.shape[0], int((bx1 + lim - X[0, 0]) / g) + 2)
+                j0 = max(0, int((by0 - lim - Y[0, 0]) / g))
+                j1 = min(X.shape[1], int((by1 + lim - Y[0, 0]) / g) + 2)
+                if i0 >= i1 or j0 >= j1:
+                    continue
+                blocked[i0:i1, j0:j1] |= item_dist(it, X[i0:i1, j0:j1], Y[i0:i1, j0:j1]) < lim
+            lab, _ = ndimage.label(region & ~blocked)
+            parts = set()
+            for k in cu.by_net.get(plane, ()):
+                it = cu.items[k]
+                if it.layers & IN2 and it.kind != 2:
+                    i = int(round((it.par[0] - X[0, 0]) / g))
+                    j = int(round((it.par[1] - Y[0, 0]) / g))
+                    if 0 <= i < X.shape[0] and 0 <= j < X.shape[1] and lab[i, j]:
+                        parts.add(int(lab[i, j]))
+            out[plane] = len(parts)
+        self._parts, self._parts_version = out, self.cu.in2_version
+        return out
+
     def _apply(self, conn: Conn, plan) -> bool:
+        """Commit a plan (ripping up its victims). A route that would cut the +3V3 plane or
+        the VDD_HP island on In2.Cu into more pieces is refused (returns False)."""
         segs, vias, victims, wd, nk, necked = plan
+        touches_in2 = any(seg[0] == 2 for seg in segs) or any(k in ("through", "micro_bottom") for *_, k in vias)
+        touches_in2 = touches_in2 and conn.net not in PLANE_NETS
+        before = self.plane_parts() if touches_in2 else None
+        mark = len(conn.items)
+        self.commit(conn, segs, wd, vias, neck=nk)
+        if touches_in2:
+            after = self.plane_parts()
+            if any(after[p] > before[p] for p in before):
+                for k in conn.items[mark:]:
+                    self.cu.remove(k)
+                del conn.items[mark:]
+                conn.done = bool(conn.items)
+                self.stats["plane_rejects"] = self.stats.get("plane_rejects", 0) + 1
+                return False
         for b in victims:
             for k in b.items:
                 self._bump_history(self.cu.items[k])
@@ -1363,7 +1447,6 @@ class Router:
             self.queue.append(b)
         if victims:
             self.log(f"    {conn.net}: ripped {', '.join(sorted({b.net for b in victims}))}")
-        self.commit(conn, segs, wd, vias, neck=nk)
         conn.note = f"w={wd:g}" + (f" (neck {nk:g})" if necked else "") + (f", {len(vias)} via" if vias else "")
         return True
 
