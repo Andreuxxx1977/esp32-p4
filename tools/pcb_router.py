@@ -1,7 +1,7 @@
 """Route the board with a router written for this design (no FreeRouting needed).
 
-Input: the placed board plus its pre-routing (``hardware/pcbnew/autoroute.py
---prerouted-only``: U1 fan-out stubs, SoC escape tracks, inner / plane / thermal vias).
+Input: the placed board plus its pre-routing (``hardware/pcbnew/preroute.py``: U1
+fan-out stubs, SoC escape tracks, inner / plane / thermal vias).
 Output: the same board with the remaining connections routed. KiCad's DRC is the judge
 (``python -m tools.check_drc_report --routed``); nothing here is trusted on its own.
 
@@ -201,6 +201,7 @@ class Item:
     ref: str = ""
     planes: str = ""           # inner layers reached: "1" (In1), "2" (In2), "12"
     width: float = 0.0
+    rewrite: bool = False      # fixed, but written by the router (a trimmed pre-routed track)
 
     def bbox(self) -> tuple[float, float, float, float]:
         p = self.par
@@ -534,6 +535,7 @@ class Copper:
         self.by_net: dict[str, set[int]] = {}
         self.version: dict[str, int] = {}
         self.in2_version = 0
+        self.dropped: set[tuple] = set()     # pre-routed segments to leave out of the output
         for it in items:
             self.add(it)
 
@@ -585,6 +587,14 @@ class Copper:
         self.alive[k] = False
         net = self.items[k].net
         self.by_net.get(net, set()).discard(k)
+        self.version[net] = self.version.get(net, 0) + 1
+        if self.items[k].layers & IN2:
+            self.in2_version += 1
+
+    def restore(self, k: int) -> None:
+        self.alive[k] = True
+        net = self.items[k].net
+        self.by_net.setdefault(net, set()).add(k)
         self.version[net] = self.version.get(net, 0) + 1
         if self.items[k].layers & IN2:
             self.in2_version += 1
@@ -1887,7 +1897,7 @@ def sexpr_items(cu: Copper) -> list[str]:
     ox, oy = ORIGIN
     out = []
     for k, it in enumerate(cu.items):
-        if not cu.alive[k] or it.fixed or it.what == "keepout":
+        if not cu.alive[k] or (it.fixed and not it.rewrite) or it.what == "keepout":
             continue
         if it.kind == 2:
             x0, y0, x1, y1, r = it.par[:5]
@@ -1895,8 +1905,9 @@ def sexpr_items(cu: Copper) -> list[str]:
                 continue
             L = 0 if it.layers & TOP else (1 if it.layers & BOT else 2)
             key = f"{it.net}:{L}:{x0:.4f},{y0:.4f}:{x1:.4f},{y1:.4f}"
+            lock = "\t\t(locked yes)\n" if it.rewrite else ""
             out.append(f'\t(segment\n\t\t(start {x0 + ox:.4f} {y0 + oy:.4f})\n\t\t(end {x1 + ox:.4f} {y1 + oy:.4f})\n'
-                       f'\t\t(width {2 * r:.4g})\n\t\t(layer "{LAYER_NAMES[L]}")\n\t\t(net "{it.net}")\n'
+                       f'\t\t(width {2 * r:.4g})\n{lock}\t\t(layer "{LAYER_NAMES[L]}")\n\t\t(net "{it.net}")\n'
                        f'\t\t(uuid "{uuid.uuid5(UUID_NS, key)}")\n\t)')
         else:
             x, y, r = it.par[:3]
@@ -1913,10 +1924,10 @@ def sexpr_items(cu: Copper) -> list[str]:
     return out
 
 
-def strip_unlocked(text: str) -> str:
-    """The board text without its unlocked tracks and vias (``--resume`` re-writes them)."""
-    out, pos = [], 0
-    for m in re.finditer(r"\n\t\((segment|via|arc)\b", text):
+def _blocks(text: str, kinds: str = "segment|via|arc"):
+    """(start, end) of the top-level blocks of these kinds in a .kicad_pcb text."""
+    pos = 0
+    for m in re.finditer(rf"\n\t\(({kinds})\b", text):
         start = m.start() + 1
         if start < pos:
             continue
@@ -1932,20 +1943,140 @@ def strip_unlocked(text: str) -> str:
             elif ch == '"':
                 k = text.index('"', k + 1)
             k += 1
-        block = text[start:k + 1]
-        if "(locked yes)" not in block:
-            out.append(text[pos:start - 1])
-            pos = k + 1
+        pos = k + 1
+        yield start, pos
+
+
+def _cut(text: str, drop) -> str:
+    """The text without the blocks for which ``drop(block)`` is true."""
+    out, pos = [], 0
+    for a, b in _blocks(text):
+        if drop(text[a:b]):
+            out.append(text[pos:a - 1])
+            pos = b
     out.append(text[pos:])
     return "".join(out)
 
 
+def strip_unlocked(text: str) -> str:
+    """The board text without its unlocked tracks and vias (``--resume`` re-writes them)."""
+    return _cut(text, lambda block: "(locked yes)" not in block)
+
+
+def segment_key(net: str, layer: str, x0: float, y0: float, x1: float, y1: float) -> tuple:
+    """Identifies a segment of the board file (board coordinates)."""
+    return (net, layer, round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4))
+
+
+_SEG = re.compile(r'\(start ([-\d.]+) ([-\d.]+)\).*?\(end ([-\d.]+) ([-\d.]+)\).*?\(layer "([^"]+)"\)'
+                  r'.*?\(net "((?:[^"\\]|\\.)*)"\)', re.S)
+
+
 def write_board(text: str, cu: Copper, out: Path) -> int:
+    if cu.dropped:
+        def drop(block):
+            m = block.lstrip().startswith("(segment") and _SEG.search(block)
+            return bool(m) and segment_key(m[6], m[5], *(float(m[i]) for i in range(1, 5))) in cu.dropped
+        text = _cut(text, drop)
     body = text.rstrip()
     assert body.endswith(")")
     new = sexpr_items(cu)
     out.write_text(body[:-1].rstrip() + "\n" + "\n".join(new) + "\n)\n")
     return len(new)
+
+
+# ==========================================================================
+# Dangling track ends
+# ==========================================================================
+
+def zone_layers(root: list) -> dict[str, int]:
+    """Net -> layer bits of its copper zones (a track end in a zone is not dangling)."""
+    out: dict[str, int] = {}
+    for z in children(root, "zone"):
+        if child(z, "keepout") is not None:
+            continue
+        net = child(z, "net_name") or child(z, "net")
+        names = (child(z, "layers") or child(z, "layer") or [None])[1:]
+        if net and isinstance(net[-1], str) and net[-1]:
+            out[net[-1]] = out.get(net[-1], 0) | layer_bits(names)
+    return out
+
+
+def _dangling_ends(t: Item, others: list[Item]) -> tuple[bool, bool]:
+    """KiCad's test (CONNECTIVITY_DATA::TestTrackEndpointDangling): an end is connected
+    when another item comes within half the track width of it; an item that reaches
+    both ends of a short track counts only for the end nearer to its own anchors."""
+    x0, y0, x1, y1, rr = t.par[:5]
+    ends = [0, 0]
+    for o in others:
+        hs, he = o.dist(x0, y0) <= rr + 1e-6, o.dist(x1, y1) <= rr + 1e-6
+        if hs and he:
+            near = [min(math.dist(a, p) for a in o.anchors()) for p in ((x0, y0), (x1, y1))]
+            ends[0 if near[0] < near[1] else 1] += 1
+        elif hs or he:
+            ends[0 if hs else 1] += 1
+        if ends[0] and ends[1]:
+            break
+    return not ends[0], not ends[1]
+
+
+def trim_stubs(cu: Copper, skip: set[str], zones: dict[str, int]):
+    """Cut back track ends that connect to nothing (where a route joined a pre-routed
+    escape track part-way along it, the rest of the escape is a dead stub). A track end
+    counts as connected the way KiCad counts it: another item of the net comes within
+    half the track width of it. A dangling end moves back along its own track to the
+    farthest point where another item of the net is anchored in the track (a track end,
+    via or pad centre); a track with nothing anchored in it goes. Nets in ``skip`` (not
+    fully routed) and tracks on a layer where their net has a zone are left alone.
+    Returns an undo function (None if nothing changed)."""
+    ox, oy = ORIGIN
+    log: list[tuple[str, int]] = []
+    dropped: list[tuple] = []
+    for net in sorted(cu.by_net):
+        if not net or net in skip:
+            continue
+        changed = True
+        while changed:
+            changed = False
+            idx = [k for k in cu.by_net.get(net, ()) if cu.alive[k]]
+            for k in idx:
+                it = cu.items[k]
+                if not cu.alive[k] or it.kind != 2 or it.what != "track" or it.layers & zones.get(net, 0):
+                    continue
+                x0, y0, x1, y1, rr = it.par[:5]
+                others = [cu.items[j] for j in idx if j != k and cu.alive[j] and cu.items[j].layers & it.layers]
+                dang = _dangling_ends(it, others)
+                if not any(dang):
+                    continue
+                vx, vy = x1 - x0, y1 - y0
+                L2 = vx * vx + vy * vy
+                us = [((qx - x0) * vx + (qy - y0) * vy) / L2 if L2 > 0 else 0.0
+                      for o in others for qx, qy in o.anchors() if it.dist(qx, qy) <= 1e-4]
+                us = [min(max(u, 0.0), 1.0) for u in us]
+                ua = min(us) if us and dang[0] else 0.0
+                ub = max(us) if us and dang[1] else 1.0
+                cu.remove(k)
+                log.append(("removed", k))
+                if not it.rewrite:
+                    key = segment_key(net, LAYER_NAMES[0 if it.layers & TOP else (1 if it.layers & BOT else 2)],
+                                      x0 + ox, y0 + oy, x1 + ox, y1 + oy)
+                    cu.dropped.add(key)
+                    dropped.append(key)
+                if us and (ub - ua) * math.sqrt(L2) > 1e-3:
+                    part = Item(2, (x0 + ua * vx, y0 + ua * vy, x0 + ub * vx, y0 + ub * vy, rr), it.layers, net,
+                                "track", fixed=it.fixed, conn=it.conn, width=it.width, rewrite=it.fixed)
+                    log.append(("added", cu.add(part)))
+                changed = True
+                break                        # the neighbours changed: look again
+    if not log:
+        return None
+
+    def undo():
+        for what, k in reversed(log):
+            (cu.remove if what == "added" else cu.restore)(k)
+        cu.dropped.difference_update(dropped)
+    undo.count = sum(1 for what, _ in log if what == "removed")
+    return undo
 
 
 # ==========================================================================
@@ -2128,6 +2259,12 @@ def kicad_drc(cli: str, board: Path, out: Path, save: bool = False) -> dict:
 _BRACKET = re.compile(r"\[([^\]]*)\]")
 
 
+def unconnected_nets(report: dict) -> set[str]:
+    """Nets of KiCad's unconnected items."""
+    return {m[0] for u in report.get("unconnected_items", []) for it in u.get("items", [])
+            for m in [_BRACKET.findall(it.get("description", ""))] if m}
+
+
 def repair(r: Router, report: dict) -> tuple[int, int]:
     """Rip up the routed connections KiCad's DRC blames and queue KiCad's unconnected
     items. Returns (ripped, new connections)."""
@@ -2202,7 +2339,7 @@ def repair(r: Router, report: dict) -> tuple[int, int]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("board", type=Path, help="pre-routed board (autoroute.py --prerouted-only)")
+    ap.add_argument("board", type=Path, help="pre-routed board (hardware/pcbnew/preroute.py)")
     ap.add_argument("-o", "--out", type=Path, required=True)
     ap.add_argument("--grid", type=float, default=GRID_MM)
     ap.add_argument("--kicad-cli", help="judge each pass with KiCad's DRC and repair what it reports")
@@ -2224,7 +2361,9 @@ def main(argv: list[str] | None = None) -> int:
     yards = parse_courtyards(text)
     necks = [yards[ref] for ref in fine if ref in yards]
     print(f"  fine-pitch fan-out neck-down in the courtyards of {', '.join(fine) or '-'}")
-    r = Router(items, args.grid, necks=necks, keepouts=keepout_polygons(sexpr(text)))
+    root = sexpr(text)
+    zones = zone_layers(root)
+    r = Router(items, args.grid, necks=necks, keepouts=keepout_polygons(root))
     if args.resume:
         print(f"  resume: {r.adopt_routing()} pieces of earlier routing adopted")
     r.run()
@@ -2258,10 +2397,27 @@ def main(argv: list[str] | None = None) -> int:
                 break
             r.drain()
             n = write_board(text, r.cu, out)
-        rep = kicad_drc(args.kicad_cli, out, report_path, save=True)
+        rep = kicad_drc(args.kicad_cli, out, report_path)
+        undo = trim_stubs(r.cu, unconnected_nets(rep) | {c.net for c in r.failed}, zones)
+        if undo:
+            write_board(text, r.cu, out)
+        rep2 = kicad_drc(args.kicad_cli, out, report_path, save=True)
+        if undo and len(rep2.get("unconnected_items", [])) > len(rep.get("unconnected_items", [])):
+            print("  dangling-end trim undone: it left more unconnected items")
+            undo()
+            write_board(text, r.cu, out)
+            rep2 = kicad_drc(args.kicad_cli, out, report_path, save=True)
+        elif undo:
+            print(f"  {undo.count} dangling track ends cut back")
+        rep = rep2
         print(f"final DRC: {len(rep.get('unconnected_items', []))} unconnected, "
               f"{sum(1 for v in rep.get('violations', []) if v.get('severity') == 'error')} errors "
               f"(report {report_path})")
+    else:
+        undo = trim_stubs(r.cu, {c.net for c in r.failed}, zones)
+        if undo:
+            print(f"  {undo.count} dangling track ends cut back")
+            n = write_board(text, r.cu, out)
     print(f"routed {r.stats['routed']} connections ({r.stats['ripped']} rip-ups), "
           f"{r.stats['failed']} failed, {n} new items, {time.time() - t0:.0f} s -> {out}")
     for c in r.failed:

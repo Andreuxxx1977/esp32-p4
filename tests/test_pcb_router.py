@@ -112,3 +112,23 @@ def test_supply_uses_in2_when_the_outer_layers_are_walled_off():
     assert not router.failed
     layers = {t.layers for t in routed_tracks(router, "VDDO_FLASH")}
     assert r.IN2 in layers
+
+
+def test_dangling_escape_end_is_cut_back_to_the_junction():
+    """A route that joins a pre-routed escape track part-way along it leaves the rest of
+    the escape as a dead stub; the trim cuts it back to the junction (KiCad's rule)."""
+    def t(x0, y0, x1, y1, fixed):
+        return r.Item(2, (X0 + x0, Y0 + y0, X0 + x1, Y0 + y1, 0.075), r.TOP, "GPIO5", "track",
+                      fixed=fixed, width=0.15)
+    escape = t(0, 0, 3, 0, True)                       # runs 1 mm past the junction at x = 2
+    items = [pad(0, 0, "GPIO5"), pad(4, 2, "GPIO5"), escape, t(2, 0, 2, 2, False), t(2, 2, 4, 2, False)]
+    cu = r.Copper(items)
+    undo = r.trim_stubs(cu, set(), {})
+    assert undo is not None and undo.count == 1
+    tracks = [cu.items[k] for k in range(len(cu.items)) if cu.alive[k] and cu.items[k].kind == 2]
+    cut = [it for it in tracks if it.rewrite]
+    assert len(cut) == 1 and cut[0].par[:4] == pytest.approx((X0, Y0, X0 + 2, Y0))
+    assert len(cu.dropped) == 1                        # the pre-routed original leaves the file
+    assert r.trim_stubs(cu, set(), {}) is None         # nothing else dangles
+    undo()
+    assert not cu.dropped and cu.alive[items.index(escape)]
