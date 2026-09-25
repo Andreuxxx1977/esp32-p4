@@ -67,9 +67,10 @@ IN2_COST = 0.6                      # extra cost per step on In2 (the +3V3 plane
 GRID_MM = 0.05
 MARGIN_MM = 0.01                    # on top of every clearance (grid slack)
 CLASSES = (0.10, 0.15, 0.20)        # clearance classes of obstacles; slot 3 = the pair partner,
-PARTNER = 3                         # slot 4 = unplated holes (hole clearance, never necked down)
-HOLE = 4
-NCLS = 5
+PARTNER = 3                         # slot 4 = unplated holes (hole clearance, never necked down),
+HOLE = 4                            # slot 5 = outlines of rule areas that only forbid vias
+VIAKO = 5
+NCLS = 6
 HOLE_CLEARANCE = lp.DESIGN_RULES["hole_clearance"]
 EDGE_MM = lp.DESIGN_RULES["copper_edge"]
 HOLE_TO_HOLE = lp.DESIGN_RULES["hole_to_hole"]
@@ -83,6 +84,7 @@ VIA_COST = 40.0                     # a via is worth 2 mm of track
 RIP_COST = 25.0                     # per step over a routed track of another net (rip-up search)
 HISTORY_STEP = 10.0
 MAX_RIPS = 12
+PAIR_PUSH_MAX = 2                   # times a pair may be pushed aside by a walled-in connection
 WINDOWS_MM = (3.0, 8.0, 20.0)       # search windows around a connection, tried in turn
 MAX_WINDOW_CELLS = 2_600_000
 
@@ -356,7 +358,7 @@ def parse_board(text: str, routed_unlocked: bool = False) -> tuple[list[Item], l
                           fixed=not routed_unlocked or child(via, "locked") is not None))
     for bits, segs, name, tracks in keepout_polygons(root):
         for x0, y0, x1, y1 in segs:                  # the outline as zero-width "copper"
-            items.append(Item(2, (x0, y0, x1, y1, 0.0), bits, "", "keepout"))
+            items.append(Item(2, (x0, y0, x1, y1, 0.0), bits, "", "keepout", ref="" if tracks else "vias-only"))
         notes.append(f"keep-out {name}: {len(segs)} edges")
     return items, notes
 
@@ -567,7 +569,7 @@ class Copper:
         if it.what == "npth":
             self.net[k], self.cls[k] = NPTH, HOLE
         elif it.what == "keepout":
-            self.net[k], self.cls[k] = KEEPOUT, 0
+            self.net[k], self.cls[k] = KEEPOUT, (VIAKO if it.ref == "vias-only" else 0)
         else:
             self.net[k], self.cls[k] = self.nid(it.net), cls_index(clearance(it.net))
         p = list(it.par) + [0.0] * (6 - len(it.par))
@@ -863,10 +865,14 @@ class Window:
 
 
 class Router:
-    def __init__(self, items: list[Item], grid: float = GRID_MM, log=print, necks=(), keepouts=()):
+    def __init__(self, items: list[Item], grid: float = GRID_MM, log=print, necks=(), keepouts=(),
+                 neck_zones=()):
         """``necks``: (layer bits, courtyard segments) of the parts whose courtyard has the
-        DRU's breakout clearance (fine-pitch fan-out)."""
+        DRU's breakout clearance (fine-pitch fan-out). ``neck_zones``: the same, where a
+        track may also neck down anywhere, not only near its terminals (the SoC courtyard:
+        the ring between its pads and the thermal-via field is the only way past it)."""
         self.necks = [(bits, np.array(segs, float)) for bits, segs in necks]
+        self.neck_zones = [(bits, np.array(segs, float)) for bits, segs in neck_zones]
         self.keepouts = [(bits, np.array(segs, float)) for bits, segs, _, tr in keepouts if tr]
         self.via_keepouts = [(bits, np.array(segs, float)) for bits, segs, _, tr in keepouts]
         self.cu = Copper(items)
@@ -893,6 +899,7 @@ class Router:
         self._isl: dict = {}
         self._next = 0
         self.stats = {"routed": 0, "ripped": 0, "failed": 0}
+        self.push_pairs = False
 
     def next_id(self) -> int:
         self._next += 1
@@ -935,7 +942,7 @@ class Router:
             for x, k in enumerate(other):
                 if grp[x]:
                     owner = self.by_id.get(cu.items[k].conn) if hasattr(self, "by_id") else None
-                    if owner is not None and not may_rip(ripper, owner):
+                    if owner is not None and not self.may_rip(ripper, owner):
                         grp[x] = 0
         lib = core()
         lib.fields(len(other), cu.kind[other], cu.lay[other], cls, grp,
@@ -971,10 +978,11 @@ class Router:
         if breakout:
             return [half + BREAKOUT_CLEARANCE + margin] * len(CLASSES) + \
                 [half + min(BREAKOUT_CLEARANCE, partner_clearance(net) if partner(net) else c) + min(margin, 0.002),
-                 hole]
+                 hole, 0.0]
         out = [half + max(c, k) + margin for k in CLASSES]
         out.append(half + (partner_clearance(net) if partner(net) else c) + min(margin, 0.002))
         out.append(hole)
+        out.append(0.0)                      # via-only rule areas: see via_maps
         return out
 
     def breakout(self, w: Window) -> np.ndarray:
@@ -1044,7 +1052,7 @@ class Router:
         vf = hf.copy()
         vr = np.ones_like(hf)
         for L in layers:
-            vf &= f[L]
+            vf &= f[L] & (obs[0, VIAKO, L] >= diameter / 2 + MARGIN_MM)    # nor across their edge
             vr &= r[L]
         return vf, vr
 
@@ -1184,9 +1192,10 @@ class Router:
         self.stats["ripped"] += 1
 
     def victims(self, w: Window, conn: Conn, path: np.ndarray, half: float, vias, via_half: float,
-                own: set[str] | None = None) -> set[int]:
+                own: set[str] | None = None, halves=None) -> set[int]:
         """Routed connections of other nets too close to a rip-up path (with the clearance
-        the path cell actually needs: necked down inside the breakout areas)."""
+        the path cell actually needs: necked down inside the breakout areas; ``halves``: the
+        track half-width per path cell where it necks down)."""
         cu = self.cu
         own = own or {conn.net}
         box = (w.x0, w.y0, w.x0 + (w.nx - 1) * w.g, w.y0 + (w.ny - 1) * w.g)
@@ -1195,7 +1204,8 @@ class Router:
         P = np.array([(L, *w.xy(i, j), bo[L][i, j]) for L, i, j in path], float).reshape(-1, 4)
         V = np.array([(*w.xy(i, j), bo[0][i, j]) for i, j in vias], float).reshape(-1, 3)
         out = set()
-        nd = np.array([self.need(conn.net, half), self.need(conn.net, half, breakout=True)])
+        nd = np.array([self.need(conn.net, 0.0), self.need(conn.net, 0.0, breakout=True)])
+        hv = np.full(len(P), half) if halves is None else np.asarray(halves, float)
         nv = np.array([self.need(conn.net, via_half), self.need(conn.net, via_half, breakout=True)])
         pn = partner(conn.net)
         for k in sel:
@@ -1208,7 +1218,7 @@ class Router:
                 if (it.layers >> L) & 1:
                     on |= P[:, 0] == L
             if on.any():
-                lim = nd[P[on, 3].astype(int), ci]
+                lim = nd[P[on, 3].astype(int), ci] + hv[on]
                 if (item_dist(it, P[on, 1], P[on, 2]) < lim).any():
                     out.add(it.conn)
                     continue
@@ -1258,6 +1268,13 @@ class Router:
         if allow_rip:
             ctx = self._context(conn, WINDOWS_MM[-1], wl, target)
             plan = self._attempt(conn, ctx, wl[-1], neck, True, **opts)
+            if plan is not None and self._apply(conn, plan):
+                return True
+            if 2 not in layers or not in2_ok(net):
+                return False
+            # it would have split a plane on In2.Cu (or its way through In2 met routing it may
+            # not rip up): try again on the outer layers only
+            plan = self._attempt(conn, ctx, wl[-1], neck, True, **{**opts, "layers": (0, 1)})
             return plan is not None and self._apply(conn, plan)
         for pad in WINDOWS_MM:
             ctx = self._context(conn, pad, wl, target)
@@ -1339,6 +1356,9 @@ class Router:
         if nk:                       # neck down to ``nk`` within NECK_MM of the two terminals
             fn, rn = self.free_maps(w, obs, net, nk / 2)
             near = [(fa[L] <= NECK_MM) | ((fb[L] <= NECK_MM) if fb is not None else False) for L in range(NL)]
+            if self.neck_zones:
+                nz = self.poly_mask(w, self.neck_zones)
+                near = [near[L] | nz[L] for L in range(NL)]
             fixed = [fixed[L] | (fn[L] & near[L]) for L in range(NL)]
             routed = [routed[L] | (rn[L] & near[L]) for L in range(NL)]
         free = list(fixed) if rip else [fixed[L] & routed[L] for L in range(NL)]
@@ -1385,10 +1405,10 @@ class Router:
         victims = []
         if rip:
             vic = self.victims(w, conn, path, wd / 2, [(i_, j_) for i_, j_, _ in vcells] + ([(i, j)] if plane else []),
-                               VIA[0] / 2)
+                               VIA[0] / 2, halves=[nk / 2 if n else wd / 2 for n in narrow] if narrow else None)
             vic.discard(-1)
             victims = [self.by_id[v] for v in vic if v in self.by_id]
-            if any(not may_rip(conn, b) for b in victims):
+            if any(not self.may_rip(conn, b) for b in victims):
                 return None
         return segs, vias_out, victims, wd, nk, bool(narrow and any(narrow))
 
@@ -1473,10 +1493,22 @@ class Router:
                 self._bump_history(self.cu.items[k])
             self.rip(b)
             self.requeue(b)
+            mate = self.by_id.get(b.pair) if b.pair >= 0 else None
+            if self.push_pairs and mate is not None and mate.done and mate.id != conn.id:
+                self.rip(mate)                   # a pushed pair is re-routed coupled
+                self.requeue(mate)
         if victims:
             self.log(f"    {conn.net}: ripped {', '.join(sorted({b.net for b in victims}))}")
         conn.note = f"w={wd:g}" + (f" (neck {nk:g})" if necked else "") + (f", {len(vias)} via" if vias else "")
         return True
+
+    def may_rip(self, by: Conn, victim: Conn) -> bool:
+        """``may_rip``, and in a last-resort search (``push_pairs``) a connection that has no
+        other way may also push a differential pair aside (both halves are re-routed)."""
+        if may_rip(by, victim):
+            return True
+        return (self.push_pairs and bool(partner(victim.net)) and victim.net != partner(by.net)
+                and victim.rips < PAIR_PUSH_MAX)
 
     def requeue(self, c: Conn) -> None:
         """Put a ripped-up connection back; earlier routing (a "legacy" piece) has no
@@ -1776,7 +1808,22 @@ class Router:
             gap = (conn.net, min(conn.a), min(conn.b) if conn.b else None)
             if gap in failed_gaps:
                 continue
+            mate = self.by_id.get(conn.pair) if conn.pair >= 0 else None
+            if mate is not None and not mate.done and self._still_needed(mate):
+                cp, cn = (conn, mate) if conn.net.endswith("_P") else (mate, conn)
+                if self.route_pair(cp, cn) or self.route_pair(cp, cn, rip=True):
+                    self.stats["routed"] += 2
+                    self.log(f"  pair {cp.net[:-2]} re-routed: {cp.note}")
+                    continue
             ok = self.route(conn) or self.route(conn, allow_rip=True)
+            if not ok:
+                self.push_pairs = True           # last resort: push a differential pair aside
+                try:
+                    ok = self.route(conn, allow_rip=True)
+                finally:
+                    self.push_pairs = False
+                if ok:
+                    self.log(f"    {conn.net}: pushed a differential pair aside")
             if not ok:
                 failed_gaps.add(gap)
             if ok:
@@ -2360,10 +2407,13 @@ def main(argv: list[str] | None = None) -> int:
     fine = dru_fine_pitch_refs(dru.read_text()) if dru.exists() else []
     yards = parse_courtyards(text)
     necks = [yards[ref] for ref in fine if ref in yards]
-    print(f"  fine-pitch fan-out neck-down in the courtyards of {', '.join(fine) or '-'}")
+    u1 = [(TOP | BOT, yards["U1"][1])] if "U1" in yards else []
+    necks += u1                        # DRU 'u1_fanout_clearance' / '_track_width': U1 courtyard, either side
+    print(f"  fine-pitch fan-out neck-down in the courtyards of {', '.join(fine) or '-'}"
+          + (", U1 (both sides)" if "U1" in yards else ""))
     root = sexpr(text)
     zones = zone_layers(root)
-    r = Router(items, args.grid, necks=necks, keepouts=keepout_polygons(root))
+    r = Router(items, args.grid, necks=necks, keepouts=keepout_polygons(root), neck_zones=u1)
     if args.resume:
         print(f"  resume: {r.adopt_routing()} pieces of earlier routing adopted")
     r.run()
