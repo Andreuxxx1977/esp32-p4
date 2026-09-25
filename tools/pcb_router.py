@@ -2601,6 +2601,9 @@ def main(argv: list[str] | None = None) -> int:
           f"{r.stats['failed']} failed, {n} new items, {time.time() - t0:.0f} s -> {out}")
     for c in r.failed:
         print(f"  unrouted: {c.net} ({c.ta[0]:.2f}, {c.ta[1]:.2f}) - ({c.tb[0]:.2f}, {c.tb[1]:.2f})")
+    if args.kicad_cli:                   # KiCad's verdict, not the router's own bookkeeping
+        return 0 if not rep.get("unconnected_items") and not any(
+            v.get("severity") == "error" and v.get("type") in REPAIR_TYPES for v in rep.get("violations", [])) else 1
     return 0 if not r.failed else 1
 
 

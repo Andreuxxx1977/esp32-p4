@@ -13,7 +13,7 @@ permissions:
 jobs:
   route:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 350
     container:
       image: kicad/kicad:10.0
       options: --user root
@@ -32,7 +32,19 @@ jobs:
         run: python3 hardware/pcbnew/preroute.py --out "$PREROUTED"
 
       - name: Route everything else (KiCad's DRC judges every pass)
-        run: python3 -m tools.pcb_router "$PREROUTED" -o "$ROUTED" --kicad-cli kicad-cli
+        run: |
+          python3 -m tools.pcb_router "$PREROUTED" -o "$ROUTED" --kicad-cli kicad-cli && exit 0
+          # What is still missing is routed again from the result (--resume): the earlier
+          # routing may be ripped up again, with fresh rip-up budgets. The committed board
+          # came from one pass and five resumed ones (the router improved between them).
+          for pass in 2 3 4 5 6 7; do
+            for f in kicad_pcb kicad_pro kicad_dru; do cp "${ROUTED%.kicad_pcb}.$f" "build/pass.$f"; done
+            echo "::group::pass $pass"
+            if python3 -m tools.pcb_router build/pass.kicad_pcb -o "$ROUTED" --kicad-cli kicad-cli --resume; then
+              echo "::endgroup::"; exit 0; fi
+            echo "::endgroup::"
+          done
+          exit 1
 
       - name: Same design, DRC gate, fabrication package
         run: |

@@ -37,7 +37,7 @@ python -m pytest -q                                # 8. all tests green
 ## Routing and fabrication files
 
 The routed board (`hardware/output/routed/`) and the fabrication package (`hardware/output/fab/`)
-are generated from the placed board, never edited by hand. It takes about half an hour and needs
+are generated from the placed board, never edited by hand. A routing pass takes up to an hour and needs
 KiCad 10 (its Python for step 2, `kicad-cli` for step 3), a C compiler, numpy and scipy:
 
 ```bash
@@ -45,6 +45,8 @@ python -m hardware.pcbnew.layout_plan escapes      # 1. only after moving parts 
 python3 hardware/pcbnew/preroute.py --out build/prerouted/esp32p4_extreme.kicad_pcb   # 2. SoC fan-out
 python3 -m tools.pcb_router build/prerouted/esp32p4_extreme.kicad_pcb \
     -o hardware/output/routed/esp32p4_extreme.kicad_pcb --kicad-cli kicad-cli            # 3. route
+# 3b. while KiCad still reports unconnected items (exit code 1): copy the result (.kicad_pcb,
+#     .kicad_pro, .kicad_dru) to build/pass.* and route again from it with --resume
 python3 -m tools.export_fab --drc hardware/output/routed/esp32p4_extreme.drc.json      # 4. Gerbers
 ```
 
