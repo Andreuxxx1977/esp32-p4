@@ -318,8 +318,10 @@ def _pad_items(fp: list, ref: str) -> list[Item]:
     return out
 
 
-def parse_board(text: str) -> tuple[list[Item], list[str]]:
-    """Pads, tracks, vias and keep-outs of a .kicad_pcb (KiCad 8-10 syntax)."""
+def parse_board(text: str, routed_unlocked: bool = False) -> tuple[list[Item], list[str]]:
+    """Pads, tracks, vias and keep-outs of a .kicad_pcb (KiCad 8-10 syntax).
+    ``routed_unlocked``: tracks and vias that are not locked count as earlier routing
+    (may be ripped up); otherwise all copper on the board is fixed."""
     root = sexpr(text)
     items: list[Item] = []
     notes = []
@@ -335,7 +337,8 @@ def parse_board(text: str) -> tuple[list[Item], list[str]]:
         w = float(child(seg, "width")[1])
         net = child(seg, "net")[-1]
         items.append(Item(2, (float(s[1]) - ox, float(s[2]) - oy, float(e[1]) - ox, float(e[2]) - oy, w / 2),
-                          layer_bits([layer]), net, "track", fixed=child(seg, "locked") is not None or True,
+                          layer_bits([layer]), net, "track",
+                          fixed=not routed_unlocked or child(seg, "locked") is not None,
                           width=w))
     for via in children(root, "via"):
         at = child(via, "at")
@@ -348,7 +351,8 @@ def parse_board(text: str) -> tuple[list[Item], list[str]]:
         planes = ("1" if "In1.Cu" in reach else "") + ("2" if "In2.Cu" in reach else "")
         net = child(via, "net")[-1]
         items.append(Item(1, (x, y, size / 2), layer_bits(reach), net,
-                          "micro" if "micro" in via[1:2] else "via", hole=(x, y, drill / 2), planes=planes))
+                          "micro" if "micro" in via[1:2] else "via", hole=(x, y, drill / 2), planes=planes,
+                          fixed=not routed_unlocked or child(via, "locked") is not None))
     for bits, segs, name, tracks in keepout_polygons(root):
         for x0, y0, x1, y1 in segs:                  # the outline as zero-width "copper"
             items.append(Item(2, (x0, y0, x1, y1, 0.0), bits, "", "keepout"))
@@ -1444,11 +1448,22 @@ class Router:
             for k in b.items:
                 self._bump_history(self.cu.items[k])
             self.rip(b)
-            self.queue.append(b)
+            self.requeue(b)
         if victims:
             self.log(f"    {conn.net}: ripped {', '.join(sorted({b.net for b in victims}))}")
         conn.note = f"w={wd:g}" + (f" (neck {nk:g})" if necked else "") + (f", {len(vias)} via" if vias else "")
         return True
+
+    def requeue(self, c: Conn) -> None:
+        """Put a ripped-up connection back; earlier routing (a "legacy" piece) has no
+        endpoints of its own, so its net's missing connections are derived afresh."""
+        if c.note != "legacy":
+            self.queue.append(c)
+            return
+        for nc in net_connections(self.cu, c.net, self.next_id):
+            self.conns.append(nc)
+            self.by_id[nc.id] = nc
+            self.queue.append(nc)
 
     def _bump_history(self, it: Item) -> None:
         """Raise the history cost on the cells a ripped-up item covered (plus its clearance)."""
@@ -1547,8 +1562,10 @@ class Router:
                         for k in v.items:
                             self._bump_history(self.cu.items[k])
                         self.rip(v)
+                        if not partner(v.net):
+                            self.requeue(v)          # (ripped pairs are queued by the pair loop)
                     self.log(f"    {net[:-2]}: ripped {', '.join(sorted({v.net for v in victims}))}")
-                    self.ripped_pairs += victims
+                    self.ripped_pairs += [v for v in victims if partner(v.net)]
                 left, right = offs
                 # which side is P: the side of the A-end P terminal relative to the start direction
                 d0 = (line[1][0] - line[0][0], line[1][1] - line[0][1])
@@ -1606,6 +1623,34 @@ class Router:
         return False
 
     # ------------------------------------------------------------------ driver
+    def adopt_routing(self) -> int:
+        """Routing that came with the board (unlocked copper, ``parse_board(...,
+        routed_unlocked=True)``): one pseudo connection per connected piece, so it can be
+        ripped up like the router's own. Ripping one re-derives its net's connections."""
+        cu = self.cu
+        n = 0
+        by_net: dict[str, list[int]] = {}
+        for k, it in enumerate(cu.items):
+            if cu.alive[k] and not it.fixed and it.what not in ("keepout", "npth"):
+                by_net.setdefault(it.net, []).append(k)
+        for net, ks in by_net.items():
+            d = DSU(len(ks))
+            for x in range(len(ks)):
+                for y in range(x + 1, len(ks)):
+                    if touching(cu.items[ks[x]], cu.items[ks[y]]):
+                        d.union(x, y)
+            groups: dict[int, list[int]] = {}
+            for x, k in enumerate(ks):
+                groups.setdefault(d.find(x), []).append(k)
+            for g in groups.values():
+                c = Conn(self.next_id(), net, [], None, cu.items[g[0]].anchors()[0], cu.items[g[0]].anchors()[0],
+                         prio=priority(net), items=list(g), done=True, note="legacy")
+                for k in g:
+                    cu.items[k].conn = c.id
+                self.conns.append(c)
+                n += 1
+        return n
+
     def run(self, max_iter: int = 20000) -> None:
         cu = self.cu
         nets = sorted(n for n in cu.by_net if n)
@@ -1849,6 +1894,33 @@ def sexpr_items(cu: Copper) -> list[str]:
     return out
 
 
+def strip_unlocked(text: str) -> str:
+    """The board text without its unlocked tracks and vias (``--resume`` re-writes them)."""
+    out, pos = [], 0
+    for m in re.finditer(r"\n\t\((segment|via|arc)\b", text):
+        start = m.start() + 1
+        if start < pos:
+            continue
+        depth, k = 0, start
+        while True:
+            ch = text[k]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif ch == '"':
+                k = text.index('"', k + 1)
+            k += 1
+        block = text[start:k + 1]
+        if "(locked yes)" not in block:
+            out.append(text[pos:start - 1])
+            pos = k + 1
+    out.append(text[pos:])
+    return "".join(out)
+
+
 def write_board(text: str, cu: Copper, out: Path) -> int:
     body = text.rstrip()
     assert body.endswith(")")
@@ -2066,7 +2138,7 @@ def repair(r: Router, report: dict) -> tuple[int, int]:
             r._bump_history(cu.items[k])
         r.rip(c)
         if c.note != "return via":           # a return via that does not fit is just dropped
-            r.queue.append(c)
+            r.requeue(c)
         ripped += 1
     new = 0
     for u in report.get("unconnected_items", []):
@@ -2115,11 +2187,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--out", type=Path, required=True)
     ap.add_argument("--grid", type=float, default=GRID_MM)
     ap.add_argument("--kicad-cli", help="judge each pass with KiCad's DRC and repair what it reports")
+    ap.add_argument("--resume", action="store_true",
+                    help="the board is already (partly) routed: keep its unlocked tracks and vias as "
+                         "rip-up-able routing and route what is missing")
     ap.add_argument("--rounds", type=int, default=10,
                     help="at most this many DRC repair rounds (with --kicad-cli); stops when they stop helping")
     args = ap.parse_args(argv)
     text = args.board.read_text()
-    items, notes = parse_board(text)
+    items, notes = parse_board(text, routed_unlocked=args.resume)
+    if args.resume:
+        text = strip_unlocked(text)         # re-written from the router's copper
     for n in notes:
         print("  " + n)
     t0 = time.time()
@@ -2129,6 +2206,8 @@ def main(argv: list[str] | None = None) -> int:
     necks = [yards[ref] for ref in fine if ref in yards]
     print(f"  fine-pitch fan-out neck-down in the courtyards of {', '.join(fine) or '-'}")
     r = Router(items, args.grid, necks=necks, keepouts=keepout_polygons(sexpr(text)))
+    if args.resume:
+        print(f"  resume: {r.adopt_routing()} pieces of earlier routing adopted")
     r.run()
     out = args.out.resolve()
     for suffix in (".kicad_pro", ".kicad_dru"):
