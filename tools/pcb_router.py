@@ -1690,6 +1690,7 @@ class Router:
         self.queue.sort(key=lambda c: (c.prio, c.length))
         it = 0
         failed = []
+        failed_gaps: set = set()       # the same gap is often queued twice (own list + KiCad's)
         while self.queue and it < max_iter:
             it += 1
             conn = self.queue.pop(0)
@@ -1698,7 +1699,12 @@ class Router:
             # the islands may have merged or split meanwhile: re-derive this net's needs
             if not self._still_needed(conn):
                 continue
+            gap = (conn.net, min(conn.a), min(conn.b) if conn.b else None)
+            if gap in failed_gaps:
+                continue
             ok = self.route(conn) or self.route(conn, allow_rip=True)
+            if not ok:
+                failed_gaps.add(gap)
             if ok:
                 self.stats["routed"] += 1
                 if it % 25 == 0:
@@ -2109,7 +2115,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--out", type=Path, required=True)
     ap.add_argument("--grid", type=float, default=GRID_MM)
     ap.add_argument("--kicad-cli", help="judge each pass with KiCad's DRC and repair what it reports")
-    ap.add_argument("--rounds", type=int, default=4, help="DRC repair rounds (with --kicad-cli)")
+    ap.add_argument("--rounds", type=int, default=10,
+                    help="at most this many DRC repair rounds (with --kicad-cli); stops when they stop helping")
     args = ap.parse_args(argv)
     text = args.board.read_text()
     items, notes = parse_board(text)
@@ -2133,13 +2140,19 @@ def main(argv: list[str] | None = None) -> int:
     n = write_board(text, r.cu, out)
     if args.kicad_cli:
         report_path = out.with_suffix(".drc.json")
+        best, stale = None, 0
         for rnd in range(1, args.rounds + 1):
             rep = kicad_drc(args.kicad_cli, out, report_path)
             errs = [v for v in rep.get("violations", []) if v.get("severity") == "error"
                     and v.get("type") in REPAIR_TYPES]
             un = rep.get("unconnected_items", [])
-            print(f"DRC round {rnd}: {len(un)} unconnected, {len(errs)} copper errors")
+            print(f"DRC round {rnd}: {len(un)} unconnected, {len(errs)} copper errors", flush=True)
             if not errs and not un:
+                break
+            score = len(un) + len(errs)
+            stale = stale + 1 if best is not None and score >= best else 0
+            best = score if best is None else min(best, score)
+            if stale >= 2:
                 break
             ripped, new = repair(r, rep)
             print(f"  repair: {ripped} connections ripped, {new} new from KiCad's unconnected list")
