@@ -132,3 +132,17 @@ def test_dangling_escape_end_is_cut_back_to_the_junction():
     assert r.trim_stubs(cu, set(), {}) is None         # nothing else dangles
     undo()
     assert not cu.dropped and cu.alive[items.index(escape)]
+
+
+def test_soc_escape_tracks_are_pushed_aside_only_as_a_last_resort():
+    """A pre-routed escape track (between U1's stub ends and the escape reach) stays put in
+    ordinary rip-up; only a last-resort search may push it aside. It stays locked in the file."""
+    esc = r.Item(2, (6.0, 0.2, 9.0, 0.2, 0.08), r.TOP, "GPIO7", "track", fixed=True, width=0.16)
+    router = r.Router([pad(0, 0, "GPIO8"), esc], log=lambda *a: None)
+    owner = next(c for c in router.conns if c.note == "escape")
+    assert owner.items and not router.cu.fixed[owner.items[0]] and esc.rewrite
+    other = r.Conn(-1, "GPIO8", [], None, (0, 0), (0, 0))
+    assert not r.may_rip(other, owner) and not router.may_rip(other, owner)
+    router.push_pairs = True
+    assert router.may_rip(other, owner)
+    assert any("(locked yes)" in s for s in r.sexpr_items(router.cu))

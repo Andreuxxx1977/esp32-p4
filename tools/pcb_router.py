@@ -756,6 +756,8 @@ def rip_rank(c: "Conn") -> float:
 
 
 def may_rip(by: "Conn", victim: "Conn") -> bool:
+    if victim.note == "escape":                  # pre-routed escape: only pushed (Router.may_rip)
+        return False
     if victim.net == partner(by.net):          # the two halves of a pair never push each other
         return False
     return rip_rank(victim) >= rip_rank(by) and victim.rips < MAX_RIPS
@@ -900,6 +902,47 @@ class Router:
         self._next = 0
         self.stats = {"routed": 0, "ripped": 0, "failed": 0}
         self.push_pairs = False
+        self.soft_escapes()
+
+    def soft_escapes(self) -> int:
+        """Pre-routed SoC escape tracks (fixed tracks between the U1 stub ends and the escape
+        reach, not of a pair or plane net) become routing that only a last-resort search may
+        push aside (``may_rip``): the planner lays them out one side of U1 at a time and can
+        leave a neighbour walled in by a few hundredths of a millimetre. They stay locked in
+        the output file. Returns the number of pieces."""
+        cu = self.cu
+        lo, hi = lp.U1_STUB_END_MM - 1e-6, lp.ESCAPE_REACH_MM + 0.5
+        ox, oy = ORIGIN
+        by_net: dict[str, list[int]] = {}
+        for k, it in enumerate(cu.items):
+            if not (cu.alive[k] and it.fixed and it.kind == 2 and it.what == "track") or partner(it.net) \
+                    or it.net in PLANE_NETS or not it.net:
+                continue
+            x0, y0, x1, y1 = it.par[:4]
+            if all(lo <= max(abs(x), abs(y)) <= hi for x, y in ((x0, y0), (x1, y1))):
+                by_net.setdefault(it.net, []).append(k)
+        n = 0
+        for net, ks in by_net.items():
+            d = DSU(len(ks))
+            for a in range(len(ks)):
+                for b in range(a + 1, len(ks)):
+                    if touching(cu.items[ks[a]], cu.items[ks[b]]):
+                        d.union(a, b)
+            groups: dict[int, list[int]] = {}
+            for a, k in enumerate(ks):
+                groups.setdefault(d.find(a), []).append(k)
+            for g in groups.values():
+                c = Conn(self.next_id(), net, [], None, cu.items[g[0]].anchors()[0], cu.items[g[0]].anchors()[0],
+                         prio=priority(net), items=list(g), done=True, note="escape")
+                for k in g:
+                    it = cu.items[k]
+                    L = LAYER_NAMES[0 if it.layers & TOP else (1 if it.layers & BOT else 2)]
+                    cu.dropped.add(segment_key(net, L, it.par[0] + ox, it.par[1] + oy, it.par[2] + ox, it.par[3] + oy))
+                    it.fixed, it.rewrite, it.conn = False, True, c.id
+                    cu.fixed[k] = False
+                self.conns.append(c)
+                n += len(g)
+        return n
 
     def next_id(self) -> int:
         self._next += 1
@@ -991,7 +1034,9 @@ class Router:
         X, Y = w.mesh()
         out = self.poly_mask(w, self.necks)
         out[0] |= (np.abs(X) < BREAKOUT_HALF) & (np.abs(Y) < BREAKOUT_HALF)
-        out[2] = False                       # the DRU areas and courtyards are outer-layer only
+        out[2] = False                       # the DRU areas and courtyards are outer-layer only,
+        if self.neck_zones:                  # but the U1 courtyard rule holds on every layer
+            out[2] |= self.poly_mask(w, self.neck_zones)[2]
         return out
 
     def poly_mask(self, w: Window, polys) -> np.ndarray:
@@ -1504,7 +1549,10 @@ class Router:
 
     def may_rip(self, by: Conn, victim: Conn) -> bool:
         """``may_rip``, and in a last-resort search (``push_pairs``) a connection that has no
-        other way may also push a differential pair aside (both halves are re-routed)."""
+        other way may also push a differential pair aside (both halves are re-routed) or a
+        pre-routed SoC escape track (see ``soft_escapes``)."""
+        if victim.note == "escape":
+            return self.push_pairs and victim.rips < PAIR_PUSH_MAX
         if may_rip(by, victim):
             return True
         return (self.push_pairs and bool(partner(victim.net)) and victim.net != partner(by.net)
@@ -1513,7 +1561,7 @@ class Router:
     def requeue(self, c: Conn) -> None:
         """Put a ripped-up connection back; earlier routing (a "legacy" piece) has no
         endpoints of its own, so its net's missing connections are derived afresh."""
-        if c.note != "legacy":
+        if c.note not in ("legacy", "escape"):
             self.queue.append(c)
             return
         for nc in net_connections(self.cu, c.net, self.next_id):
@@ -1692,7 +1740,7 @@ class Router:
         n = 0
         by_net: dict[str, list[int]] = {}
         for k, it in enumerate(cu.items):
-            if cu.alive[k] and not it.fixed and it.what not in ("keepout", "npth"):
+            if cu.alive[k] and not it.fixed and it.what not in ("keepout", "npth") and it.conn < 0:
                 by_net.setdefault(it.net, []).append(k)
         for net, ks in by_net.items():
             d = DSU(len(ks))
@@ -2111,7 +2159,7 @@ def trim_stubs(cu: Copper, skip: set[str], zones: dict[str, int]):
                     dropped.append(key)
                 if us and (ub - ua) * math.sqrt(L2) > 1e-3:
                     part = Item(2, (x0 + ua * vx, y0 + ua * vy, x0 + ub * vx, y0 + ub * vy, rr), it.layers, net,
-                                "track", fixed=it.fixed, conn=it.conn, width=it.width, rewrite=it.fixed)
+                                "track", fixed=it.fixed, conn=it.conn, width=it.width, rewrite=it.fixed or it.rewrite)
                     log.append(("added", cu.add(part)))
                 changed = True
                 break                        # the neighbours changed: look again
@@ -2328,7 +2376,7 @@ def repair(r: Router, report: dict) -> tuple[int, int]:
             x, y = item["pos"]["x"] - ORIGIN[0], item["pos"]["y"] - ORIGIN[1]
             for k in cu.by_net.get(net, ()):
                 it = cu.items[k]
-                if it.fixed or it.conn < 0:
+                if it.fixed or it.conn < 0 or it.rewrite:
                     continue
                 if it.dist(x, y) <= 0.05 or any(math.dist(a, (x, y)) < 0.05 for a in it.anchors()):
                     blamed.add(it.conn)
@@ -2407,7 +2455,7 @@ def main(argv: list[str] | None = None) -> int:
     fine = dru_fine_pitch_refs(dru.read_text()) if dru.exists() else []
     yards = parse_courtyards(text)
     necks = [yards[ref] for ref in fine if ref in yards]
-    u1 = [(TOP | BOT, yards["U1"][1])] if "U1" in yards else []
+    u1 = [(TOP | BOT | IN2, yards["U1"][1])] if "U1" in yards else []
     necks += u1                        # DRU 'u1_fanout_clearance' / '_track_width': U1 courtyard, either side
     print(f"  fine-pitch fan-out neck-down in the courtyards of {', '.join(fine) or '-'}"
           + (", U1 (both sides)" if "U1" in yards else ""))
