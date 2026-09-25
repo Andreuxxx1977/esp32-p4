@@ -63,6 +63,7 @@ ORIGIN = lp.PAGE_ORIGIN_MM          # board file coordinates = design coordinate
 LAYER_NAMES = ("F.Cu", "B.Cu", "In2.Cu")   # routing layers 0, 1, 2 (In1.Cu stays a solid GND plane)
 TOP, BOT, IN2 = 1, 2, 4                    # layer bits
 NL = 3
+PLANE_SLACK = 0.25
 IN2_COST = 0.6                      # extra cost per step on In2 (the +3V3 plane layer): only when needed
 GRID_MM = 0.05
 MARGIN_MM = 0.01                    # on top of every clearance (grid slack)
@@ -660,18 +661,92 @@ class DSU:
             self.p[rb] = ra
 
 
-def net_islands(cu: Copper, net: str) -> tuple[list[list[int]], int | None]:
-    """Connected copper groups of a net; the index of the group on the plane (if any)."""
+PLANE_GRID = 0.05
+PLANE_MIN_THICKNESS = 0.15          # the zones' min_thickness
+PIECE_PLANES = ("+3V3", "VDD_HP")   # In2.Cu zones: routing on In2 (and via fields) can cut them
+
+
+def plane_pieces(cu: Copper, plane: str):
+    """Where the In2.Cu fill of ``plane`` can flow once it keeps its clearance to the other
+    nets' In2 copper, as a label raster (conservative: the zone clearance plus half the
+    minimum fill width, PLANE_SLACK cells of slack). Returns (labels, x0, y0, grid, main
+    label = the largest piece). Cached until In2 changes."""
+    cache = cu.__dict__.setdefault("_pieces", {})
+    hit = cache.get(plane)
+    if hit is not None and hit[0] == cu.in2_version:
+        return hit[1]
+    from scipy import ndimage
+    g = PLANE_GRID
+    grid = cu.__dict__.get("_pgrid")
+    if grid is None:
+        x0, y0, x1, y1 = bs.BOARD_OUTLINE
+        X, Y = np.meshgrid(np.arange(x0, x1 + g / 2, g), np.arange(y0, y1 + g / 2, g), indexing="ij")
+        inset = EDGE_MM + PLANE_MIN_THICKNESS / 2
+        a = np.maximum(np.abs(X), np.abs(Y))
+        board = (X > x0 + inset) & (X < x1 - inset) & (Y > y0 + inset) & (Y < y1 - inset)
+        isl = lp.VDD_HP_ISLAND_HALF_MM
+        region = {"+3V3": board & (a > isl + lp.ZONE_CLEARANCE_MM + PLANE_MIN_THICKNESS / 2),
+                  "VDD_HP": a < isl - PLANE_MIN_THICKNESS / 2}
+        grid = cu._pgrid = (X, Y, region)
+    X, Y, region = grid
+    n = len(cu.items)
+    idx = np.nonzero(cu.alive[:n] & ((cu.lay[:n] & IN2) > 0))[0]
+    blocked = np.zeros(X.shape, bool)
+    for k in idx:
+        it = cu.items[k]
+        if it.net == plane or it.what == "keepout":
+            continue
+        c = max(lp.ZONE_CLEARANCE_MM, clearance(it.net) if it.what != "npth" else HOLE_CLEARANCE)
+        lim = c + PLANE_MIN_THICKNESS / 2 + g * PLANE_SLACK
+        bx0, by0, bx1, by1 = it.bbox()
+        i0 = max(0, int((bx0 - lim - X[0, 0]) / g))
+        i1 = min(X.shape[0], int((bx1 + lim - X[0, 0]) / g) + 2)
+        j0 = max(0, int((by0 - lim - Y[0, 0]) / g))
+        j1 = min(X.shape[1], int((by1 + lim - Y[0, 0]) / g) + 2)
+        if i0 < i1 and j0 < j1:
+            blocked[i0:i1, j0:j1] |= item_dist(it, X[i0:i1, j0:j1], Y[i0:i1, j0:j1]) < lim
+    lab, nl = ndimage.label(region[plane] & ~blocked, structure=np.ones((3, 3), bool))
+    sizes = np.bincount(lab.ravel())
+    sizes[0] = 0
+    out = (lab, X[0, 0], Y[0, 0], g, int(np.argmax(sizes)) if nl else 0)
+    cache[plane] = (cu.in2_version, out)
+    return out
+
+
+def piece_at(cu: Copper, plane: str, x: float, y: float) -> int:
+    lab, x0, y0, g, _ = plane_pieces(cu, plane)
+    i, j = int(round((x - x0) / g)), int(round((y - y0) / g))
+    return int(lab[i, j]) if 0 <= i < lab.shape[0] and 0 <= j < lab.shape[1] else 0
+
+
+def net_islands(cu: Copper, net: str, use_plane: bool = True) -> tuple[list[list[int]], int | None]:
+    """Connected copper groups of a net; the index of the group on the plane (if any).
+    ``use_plane=False``: copper only (the plane does not join the groups)."""
     idx = sorted(cu.by_net.get(net, ()))
     if not idx:
         return [], None
     items = [cu.items[k] for k in idx]
     n = len(items)
-    d = DSU(n + 1)                           # n = the plane
+    pieces = use_plane and net in PIECE_PLANES
+    main = plane_pieces(cu, net)[4] if pieces else 0
+    extra: dict[int, int] = {}               # cut-off pieces of the plane (their own nodes)
+    for i in range(n):
+        if pieces and on_plane(items[i]):
+            lab = piece_at(cu, net, *items[i].par[:2])
+            if lab and lab != main:
+                extra.setdefault(lab, n + 1 + len(extra))
+    d = DSU(n + 1 + len(extra))              # n = the plane
     boxes = cu.box[idx]
     for i in range(n):
-        if on_plane(items[i]):
-            d.union(n, i)
+        if use_plane and on_plane(items[i]):
+            if pieces:
+                lab = piece_at(cu, net, *items[i].par[:2])
+                if lab == main:
+                    d.union(n, i)
+                elif lab:
+                    d.union(extra[lab], i)
+            else:
+                d.union(n, i)
         cand = np.nonzero((boxes[i + 1:, 0] <= boxes[i, 2] + 1e-6) & (boxes[i + 1:, 2] >= boxes[i, 0] - 1e-6) &
                           (boxes[i + 1:, 1] <= boxes[i, 3] + 1e-6) & (boxes[i + 1:, 3] >= boxes[i, 1] - 1e-6))[0]
         for j in cand + i + 1:
@@ -1293,6 +1368,10 @@ class Router:
             kinds = ("micro_top", "through")
         else:
             region = a > PLUS_3V3_KEEP_HALF
+            lab, x0, y0, g, main = plane_pieces(self.cu, net)
+            li = np.clip(np.rint((X - x0) / g).astype(int), 0, lab.shape[0] - 1)
+            lj = np.clip(np.rint((Y - y0) / g).astype(int), 0, lab.shape[1] - 1)
+            region &= lab[li, lj] == main            # not into a piece the routing has cut off
             top, bot = vt & vtr, m_bot & m_bot_r
             kinds = ("through", "micro_bottom")
         return np.stack([top & region & free[0], bot & region & free[1], np.zeros_like(top)]), kinds
@@ -1458,60 +1537,32 @@ class Router:
         return segs, vias_out, victims, wd, nk, bool(narrow and any(narrow))
 
     # ------------------------------------------------------------------ plane integrity
-    PLANE_GRID = 0.1
-    ZONE_MIN_THICKNESS = 0.15
-
     def plane_parts(self) -> dict[str, int]:
         """In2.Cu carries the +3V3 plane and the VDD_HP island. Count, per plane, the pieces
         its vias / pins end up in once the fill flows around the other nets' In2 copper
-        (conservative raster: zone clearance, half the minimum fill width, half a cell)."""
+        (``plane_pieces``); pieces joined by the net's own copper elsewhere count as one."""
         if getattr(self, "_parts_version", None) == self.cu.in2_version:
             return self._parts
-        from scipy import ndimage
-        g = self.PLANE_GRID
-        if not hasattr(self, "_pX"):
-            x0, y0, x1, y1 = bs.BOARD_OUTLINE
-            xs = np.arange(x0, x1 + g / 2, g)
-            ys = np.arange(y0, y1 + g / 2, g)
-            self._pX, self._pY = np.meshgrid(xs, ys, indexing="ij")
-            inset = EDGE_MM + self.ZONE_MIN_THICKNESS / 2
-            a = np.maximum(np.abs(self._pX), np.abs(self._pY))
-            board = (self._pX > x0 + inset) & (self._pX < x1 - inset) & (self._pY > y0 + inset) & \
-                (self._pY < y1 - inset)
-            isl = lp.VDD_HP_ISLAND_HALF_MM
-            self._pregion = {"+3V3": board & (a > isl + lp.ZONE_CLEARANCE_MM + self.ZONE_MIN_THICKNESS / 2),
-                             "VDD_HP": a < isl - self.ZONE_MIN_THICKNESS / 2}
-        X, Y = self._pX, self._pY
         cu = self.cu
-        n = len(cu.items)
-        idx = np.nonzero(cu.alive[:n] & ((cu.lay[:n] & IN2) > 0))[0]
         out = {}
-        for plane, region in self._pregion.items():
-            blocked = np.zeros(X.shape, bool)
-            for k in idx:
-                it = cu.items[k]
-                if it.net == plane or it.what == "keepout":
-                    continue
-                c = max(lp.ZONE_CLEARANCE_MM, clearance(it.net) if it.what != "npth" else HOLE_CLEARANCE)
-                lim = c + self.ZONE_MIN_THICKNESS / 2 + g / 2
-                bx0, by0, bx1, by1 = it.bbox()
-                i0 = max(0, int((bx0 - lim - X[0, 0]) / g))
-                i1 = min(X.shape[0], int((bx1 + lim - X[0, 0]) / g) + 2)
-                j0 = max(0, int((by0 - lim - Y[0, 0]) / g))
-                j1 = min(X.shape[1], int((by1 + lim - Y[0, 0]) / g) + 2)
-                if i0 >= i1 or j0 >= j1:
-                    continue
-                blocked[i0:i1, j0:j1] |= item_dist(it, X[i0:i1, j0:j1], Y[i0:i1, j0:j1]) < lim
-            lab, _ = ndimage.label(region & ~blocked)
-            parts = set()
-            for k in cu.by_net.get(plane, ()):
-                it = cu.items[k]
-                if it.layers & IN2 and it.kind != 2:
-                    i = int(round((it.par[0] - X[0, 0]) / g))
-                    j = int(round((it.par[1] - Y[0, 0]) / g))
-                    if 0 <= i < X.shape[0] and 0 <= j < X.shape[1] and lab[i, j]:
-                        parts.add(int(lab[i, j]))
-            out[plane] = len(parts)
+        for plane in PIECE_PLANES:
+            lab, x0, y0, g, _ = plane_pieces(cu, plane)
+            groups, _ = net_islands(cu, plane, use_plane=False)
+            d = DSU(int(lab.max()) + 1)
+            seen = set()
+            for grp in groups:
+                first = None
+                for k in grp:
+                    it = cu.items[k]
+                    if it.layers & IN2 and it.kind != 2:
+                        p = piece_at(cu, plane, *it.par[:2])
+                        if p:
+                            seen.add(p)
+                            if first is None:
+                                first = p
+                            else:
+                                d.union(first, p)
+            out[plane] = len({d.find(x) for x in seen})
         self._parts, self._parts_version = out, self.cu.in2_version
         return out
 
@@ -1901,7 +1952,7 @@ class Router:
         return True
 
     def islands(self, net: str):
-        key = (net, self.cu.version.get(net, 0))
+        key = (net, self.cu.version.get(net, 0), self.cu.in2_version if net in PIECE_PLANES else 0)
         if self._isl.get(net, (None,))[0] != key:
             self._isl[net] = (key, net_islands(self.cu, net))
         return self._isl[net][1]
@@ -2304,9 +2355,34 @@ def return_vias(r: Router) -> int:
     cu = r.cu
     sig = [k for k, it in enumerate(cu.items)
            if cu.alive[k] and not it.fixed and it.what == "via" and (partner(it.net) or netclass(it.net) == "SE_50")]
+    gnd = [k for k in cu.by_net.get(bs.GND, ()) if cu.items[k].what == "via"]
+    # earlier return vias (a resumed board): one per signal via is enough
+    def alone(k):                            # a via that touches no other GND copper
+        it = cu.items[k]
+        return not any(j != k and cu.alive[j] and cu.items[j].net == bs.GND and touching(it, cu.items[j])
+                       for j in cu.select(it.bbox(), 0.01))
+    lone = {c.items[0] for c in r.conns if c.done and c.net == bs.GND and len(c.items) == 1
+            and cu.items[c.items[0]].what == "via" and c.note in ("legacy", "return via")
+            and alone(c.items[0])}
+    keep: set[int] = set()
+    for k in sig:
+        x, y = cu.items[k].par[:2]
+        near = sorted((math.dist((x, y), cu.items[g].par[:2]), g) for g in gnd
+                      if cu.alive[g] and math.dist((x, y), cu.items[g].par[:2]) <= RETURN_VIA_MM[1] + 0.05)
+        keep.update(g for _, g in near[:1])
+    dropped = 0
+    for c in r.conns:
+        if c.done and len(c.items) == 1 and c.items[0] in lone and c.items[0] not in keep:
+            r.rip(c)
+            c.rips -= 1
+            dropped += 1
+    if dropped:
+        r.log(f"  {dropped} surplus GND return vias of the earlier routing removed")
     added = 0
     for k in sig:
         x, y = cu.items[k].par[:2]
+        if any(cu.alive[g] and math.dist((x, y), cu.items[g].par[:2]) <= RETURN_VIA_MM[1] + 0.05 for g in keep):
+            continue
         w = r.window([(x, y)], RETURN_VIA_MM[1] + 0.5)
         obs, _, holes = r.fields(w, {bs.GND}, None, VIA[0] + max(CLASSES) + 0.1)
         vf, vr = r.via_maps(w, obs, holes, bs.GND, VIA[0], VIA[1], (0, 1, 2))
@@ -2317,8 +2393,13 @@ def return_vias(r: Router) -> int:
             continue
         i, j = np.unravel_index(np.argmin(np.where(ok, d, np.inf)), d.shape)
         c = Conn(r.next_id(), bs.GND, [], None, (x, y), (x, y), prio=8)
+        before = r.plane_parts()
         r.commit(c, [], VIA[0], [(*w.xy(i, j), "through")])
+        if any(n > before[p] for p, n in r.plane_parts().items()):
+            r.rip(c)                         # it would cut a plane on In2.Cu
+            continue
         c.note = "return via"
+        keep.update(c.items)
         r.conns.append(c)
         r.by_id[c.id] = c
         added += 1
