@@ -744,6 +744,8 @@ def rip_rank(c: "Conn") -> float:
 
 
 def may_rip(by: "Conn", victim: "Conn") -> bool:
+    if victim.net == partner(by.net):          # the two halves of a pair never push each other
+        return False
     return rip_rank(victim) >= rip_rank(by) and victim.rips < MAX_RIPS
 
 
