@@ -1515,111 +1515,116 @@ class Router:
         launches = [x for x in PAIR_LAUNCH_MM if x <= max(PAIR_LAUNCH_MM[0], 0.3 * span)]
         launches = launches[-1:] if rip else launches
         pads = WINDOWS_MM[-1:] if rip else WINDOWS_MM
-        for launch in launches:
-            for pad in pads:
-                w = self.window([cp.ta, cp.tb, cn.ta, cn.tb], pad)
-                half = h + wd / 2
-                reach = half + max(CLASSES) + 0.1
-                obs, ownf, holes = self.fields(w, {"#none"}, None, reach)
-                # fat centre line: every other copper, the pair's own included, is an obstacle
-                fixed, routed = self.free_maps(w, obs, net, half, margin=MARGIN_MM + 0.015)
-                free0 = fixed[0] if rip else fixed[0] & routed[0]
-                X, Y = w.mesh()
-                ra = launch + math.dist(cp.ta, cn.ta) / 2
-                rb = launch + math.dist(cp.tb, cn.tb) / 2
-                z = np.zeros_like(free0)
-                src = np.stack([free0 & (np.hypot(X - ma[0], Y - ma[1]) <= ra), z, z])
-                dst = np.stack([free0 & (np.hypot(X - mb[0], Y - mb[1]) <= rb), z, z])
-                if not src.any() or not dst.any():
-                    why.append(f"no launch room at the {'A' if not src.any() else 'B'} end (r {launch})")
+        # F.Cu over the GND plane first; B.Cu (over the +3V3 plane, same stack-up distance)
+        # only when F.Cu has no coupled path -- the fan-ins then drop to it with vias
+        for PL, launch, pad in [(PL, la, pa) for PL in (0, 1) for la in launches for pa in pads]:
+            w = self.window([cp.ta, cp.tb, cn.ta, cn.tb], pad)
+            half = h + wd / 2
+            reach = half + max(CLASSES) + 0.1
+            obs, ownf, holes = self.fields(w, {"#none"}, None, reach)
+            # fat centre line: every other copper, the pair's own included, is an obstacle
+            fixed, routed = self.free_maps(w, obs, net, half, margin=MARGIN_MM + 0.015)
+            free0 = fixed[PL] if rip else fixed[PL] & routed[PL]
+            X, Y = w.mesh()
+            ra = launch + math.dist(cp.ta, cn.ta) / 2
+            rb = launch + math.dist(cp.tb, cn.tb) / 2
+            src = np.zeros((NL, w.nx, w.ny), bool)
+            dst = np.zeros((NL, w.nx, w.ny), bool)
+            src[PL] = free0 & (np.hypot(X - ma[0], Y - ma[1]) <= ra)
+            dst[PL] = free0 & (np.hypot(X - mb[0], Y - mb[1]) <= rb)
+            if not src.any() or not dst.any():
+                why.append(f"no launch room at the {'A' if not src.any() else 'B'} end (r {launch})")
+                continue
+            if (src & dst).any():
+                why.append("launch regions overlap")
+                continue
+            hist = self.hist[:, w.i0:w.i0 + w.nx, w.j0:w.j0 + w.ny]
+            cost = np.full((NL, w.nx, w.ny), -1.0, np.float32)
+            cost[PL] = np.where(free0, hist[PL], -1.0)
+            if rip:
+                cost[PL] = np.where((cost[PL] >= 0) & ~routed[PL], cost[PL] + RIP_COST, cost[PL])
+            path = self.search(w, cost, [], src, dst, turn90=-1.0, turn45=8.0)
+            if path is None:
+                why.append(f"no coupled path on {LAYER_NAMES[PL]} (window {pad} mm)")
+                continue
+            pts = [w.xy(i, j) for L, i, j in path]
+            line = simplify(pts)
+            offs = offset_polyline(line, h) if len(line) >= 2 else None
+            if offs is None:
+                why.append("degenerate centre line")
+                continue
+            victims = []
+            if rip:
+                vic = self.victims(w, cp, path, half, [], half, own={cp.net, cn.net})
+                vic.discard(-1)
+                victims = [self.by_id[v] for v in vic if v in self.by_id]
+                if not victims or any(not may_rip(cp, v) for v in victims):
+                    why.append("rip-up refused")
                     continue
-                if (src & dst).any():
-                    why.append("launch regions overlap")
-                    continue
-                hist = self.hist[:, w.i0:w.i0 + w.nx, w.j0:w.j0 + w.ny]
-                cost = np.where(np.stack([free0, z, z]), hist, -1.0).astype(np.float32)
-                if rip:
-                    cost[0] = np.where((cost[0] >= 0) & ~routed[0], cost[0] + RIP_COST, cost[0])
-                path = self.search(w, cost, [], src, dst, turn90=-1.0, turn45=8.0)
-                if path is None:
-                    why.append(f"no coupled path (window {pad} mm)")
-                    continue
-                pts = [w.xy(i, j) for L, i, j in path]
-                line = simplify(pts)
-                offs = offset_polyline(line, h) if len(line) >= 2 else None
-                if offs is None:
-                    why.append("degenerate centre line")
-                    continue
-                victims = []
-                if rip:
-                    vic = self.victims(w, cp, path, half, [], half, own={cp.net, cn.net})
-                    vic.discard(-1)
-                    victims = [self.by_id[v] for v in vic if v in self.by_id]
-                    if not victims or any(not may_rip(cp, v) for v in victims):
-                        why.append("rip-up refused")
-                        continue
-                    for v in victims:
-                        for k in v.items:
-                            self._bump_history(self.cu.items[k])
-                        self.rip(v)
-                        if not partner(v.net):
-                            self.requeue(v)          # (ripped pairs are queued by the pair loop)
-                    self.log(f"    {net[:-2]}: ripped {', '.join(sorted({v.net for v in victims}))}")
-                    self.ripped_pairs += [v for v in victims if partner(v.net)]
-                left, right = offs
-                # which side is P: the side of the A-end P terminal relative to the start direction
-                d0 = (line[1][0] - line[0][0], line[1][1] - line[0][1])
-                side_p = cross(d0, (cp.ta[0] - cn.ta[0], cp.ta[1] - cn.ta[1]))
-                pl, nl = (left, right) if side_p > 0 else (right, left)
-                d1 = (line[-1][0] - line[-2][0], line[-1][1] - line[-2][1])
-                side_b = cross(d1, (cp.tb[0] - cn.tb[0], cp.tb[1] - cn.tb[1]))
-                swapped = side_b * side_p < 0
-                cpp = Conn(self.next_id(), cp.net, [], None, pl[0], pl[-1], prio=cp.prio)
-                cnn = Conn(self.next_id(), cn.net, [], None, nl[0], nl[-1], prio=cn.prio)
-                for c_, poly in ((cpp, pl), (cnn, nl)):
-                    segs = [(0, a, b) for a, b in zip(poly, poly[1:])]
-                    self.commit(c_, segs, wd, [])
-                ok = True
-                fans = []
-                # the P / N order is reversed at the B end: one fan-in crosses under the other
-                # (two vias; Espressif: add GND return vias next to them -- the GND pour does)
-                for c, poly, first in ((cp, pl, True), (cn, nl, True), (cp, pl, False), (cn, nl, False)):
-                    end = poly[0] if first else poly[-1]
-                    grp = c.a if first else c.b
-                    fc = Conn(self.next_id(), c.net, grp, None, c.ta if first else c.tb, end, prio=c.prio)
+                for v in victims:
+                    for k in v.items:
+                        self._bump_history(self.cu.items[k])
+                    self.rip(v)
+                    if not partner(v.net):
+                        self.requeue(v)          # (ripped pairs are queued by the pair loop)
+                self.log(f"    {net[:-2]}: ripped {', '.join(sorted({v.net for v in victims}))}")
+                self.ripped_pairs += [v for v in victims if partner(v.net)]
+            left, right = offs
+            # which side is P: the side of the A-end P terminal relative to the start direction
+            d0 = (line[1][0] - line[0][0], line[1][1] - line[0][1])
+            side_p = cross(d0, (cp.ta[0] - cn.ta[0], cp.ta[1] - cn.ta[1]))
+            pl, nl = (left, right) if side_p > 0 else (right, left)
+            d1 = (line[-1][0] - line[-2][0], line[-1][1] - line[-2][1])
+            side_b = cross(d1, (cp.tb[0] - cn.tb[0], cp.tb[1] - cn.tb[1]))
+            swapped = side_b * side_p < 0
+            cpp = Conn(self.next_id(), cp.net, [], None, pl[0], pl[-1], prio=cp.prio)
+            cnn = Conn(self.next_id(), cn.net, [], None, nl[0], nl[-1], prio=cn.prio)
+            for c_, poly in ((cpp, pl), (cnn, nl)):
+                segs = [(PL, a, b) for a, b in zip(poly, poly[1:])]
+                self.commit(c_, segs, wd, [])
+            ok = True
+            fans = []
+            # the P / N order is reversed at the B end: one fan-in crosses under the other
+            # (two vias; Espressif: add GND return vias next to them -- the GND pour does)
+            for c, poly, first in ((cp, pl, True), (cn, nl, True), (cp, pl, False), (cn, nl, False)):
+                end = poly[0] if first else poly[-1]
+                grp = c.a if first else c.b
+                fc = Conn(self.next_id(), c.net, grp, None, c.ta if first else c.tb, end, prio=c.prio)
 
-                    def tgt(w2, free, end=end):
-                        X2, Y2 = w2.mesh()
-                        m = (np.hypot(X2 - end[0], Y2 - end[1]) <= wd * 0.45) & free[0]
-                        return np.stack([m, np.zeros_like(m), np.zeros_like(m)])
-                    cross_under = swapped and not first and c is cn
-                    if not self.route(fc, layers=(0, 1) if cross_under else (0,), no_vias=not cross_under,
-                                      target=(end, tgt), width_list=(wd,)):
-                        why.append(f"fan-in of {c.net} at the {'A' if first else 'B'} end"
-                                   + (" (P/N order reversed)" if swapped and not first else ""))
-                        ok = False
-                        break
-                    last = next(self.cu.items[k] for k in reversed(fc.items) if self.cu.items[k].kind == 2)
-                    tip = (last.par[2], last.par[3])
-                    if math.dist(tip, end) > 1e-6:          # last grid cell -> exact offset end
-                        self.commit(fc, [(0, tip, end)], wd, [])
-                    fans.append(fc)
-                if not ok:
-                    for c_ in [cpp, cnn] + fans:
-                        for k in c_.items:
-                            self.cu.remove(k)
-                    continue                                # (ripped victims are queued again)
-                cp.items = cpp.items + [k for f in fans if f.net == cp.net for k in f.items]
-                cn.items = cnn.items + [k for f in fans if f.net == cn.net for k in f.items]
-                for c in (cp, cn):
-                    for k in c.items:
-                        self.cu.items[k].conn = c.id
-                    c.done = True
-                bends = len(line) - 2
-                length = sum(math.dist(a, b) for a, b in zip(line, line[1:]))
-                cp.note = cn.note = (f"coupled, {length:.1f} mm, {bends} bends"
-                                     + (", P/N crossed with vias" if swapped else ""))
-                return True
+                def tgt(w2, free, end=end, PL=PL):
+                    X2, Y2 = w2.mesh()
+                    m = np.zeros((NL, w2.nx, w2.ny), bool)
+                    m[PL] = (np.hypot(X2 - end[0], Y2 - end[1]) <= wd * 0.45) & free[PL]
+                    return m
+                cross_under = (swapped and not first and c is cn) or PL == 1
+                if not self.route(fc, layers=(0, 1) if cross_under else (0,), no_vias=not cross_under,
+                                  target=(end, tgt), width_list=(wd,)):
+                    why.append(f"fan-in of {c.net} at the {'A' if first else 'B'} end"
+                               + (" (P/N order reversed)" if swapped and not first else ""))
+                    ok = False
+                    break
+                last = next(self.cu.items[k] for k in reversed(fc.items) if self.cu.items[k].kind == 2)
+                tip = (last.par[2], last.par[3])
+                if math.dist(tip, end) > 1e-6:          # last grid cell -> exact offset end
+                    self.commit(fc, [(PL, tip, end)], wd, [])
+                fans.append(fc)
+            if not ok:
+                for c_ in [cpp, cnn] + fans:
+                    for k in c_.items:
+                        self.cu.remove(k)
+                continue                                # (ripped victims are queued again)
+            cp.items = cpp.items + [k for f in fans if f.net == cp.net for k in f.items]
+            cn.items = cnn.items + [k for f in fans if f.net == cn.net for k in f.items]
+            for c in (cp, cn):
+                for k in c.items:
+                    self.cu.items[k].conn = c.id
+                c.done = True
+            bends = len(line) - 2
+            length = sum(math.dist(a, b) for a, b in zip(line, line[1:]))
+            cp.note = cn.note = (f"coupled, {length:.1f} mm, {bends} bends"
+                                 + (f" on {LAYER_NAMES[PL]}" if PL else "")
+                                 + (", P/N crossed with vias" if swapped else ""))
+            return True
         return False
 
     # ------------------------------------------------------------------ driver
