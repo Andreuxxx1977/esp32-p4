@@ -900,9 +900,11 @@ class Router:
             return self.window(pts, pad * 0.7)
         return Window(i0, j0, nx, ny, self.bx0 + i0 * g, self.by0 + j0 * g, g)
 
-    def fields(self, w: Window, own: set[str], partner_net: str | None, reach: float):
+    def fields(self, w: Window, own: set[str], partner_net: str | None, reach: float,
+               ripper: "Conn | None" = None):
         """Distance fields in the window: obs[grp][cls][layer] for other nets (grp 0 fixed,
-        1 routed), own[layer] for the nets in ``own``, holes (all nets)."""
+        1 routed -- routing that ``ripper`` may not rip up counts as fixed), own[layer] for the
+        nets in ``own``, holes (all nets)."""
         cu = self.cu
         sel = cu.select((w.x0, w.y0, w.x0 + (w.nx - 1) * w.g, w.y0 + (w.ny - 1) * w.g), reach)
         own_ids = {cu.net_id[n] for n in own if n in cu.net_id}
@@ -917,6 +919,12 @@ class Router:
         cls = cu.cls[other].copy()
         cls[cu.net[other] == pid] = PARTNER
         grp = (~cu.fixed[other]).astype(np.int32)
+        if ripper is not None:
+            for x, k in enumerate(other):
+                if grp[x]:
+                    owner = self.by_id.get(cu.items[k].conn) if hasattr(self, "by_id") else None
+                    if owner is not None and not may_rip(ripper, owner):
+                        grp[x] = 0
         lib = core()
         lib.fields(len(other), cu.kind[other], cu.lay[other], cls, grp,
                    np.ascontiguousarray(cu.par[other]), np.ascontiguousarray(cu.box[other]),
@@ -1165,16 +1173,18 @@ class Router:
 
     def victims(self, w: Window, conn: Conn, path: np.ndarray, half: float, vias, via_half: float,
                 own: set[str] | None = None) -> set[int]:
-        """Routed connections of other nets too close to a rip-up path."""
+        """Routed connections of other nets too close to a rip-up path (with the clearance
+        the path cell actually needs: necked down inside the breakout areas)."""
         cu = self.cu
         own = own or {conn.net}
         box = (w.x0, w.y0, w.x0 + (w.nx - 1) * w.g, w.y0 + (w.ny - 1) * w.g)
         sel = [k for k in cu.select(box, 1.0) if not cu.fixed[k] and cu.items[k].net not in own]
-        P = np.array([(L, *w.xy(i, j)) for L, i, j in path], float).reshape(-1, 3)
-        V = np.array([w.xy(i, j) for i, j in vias], float).reshape(-1, 2)
+        bo = self.breakout(w)
+        P = np.array([(L, *w.xy(i, j), bo[L][i, j]) for L, i, j in path], float).reshape(-1, 4)
+        V = np.array([(*w.xy(i, j), bo[0][i, j]) for i, j in vias], float).reshape(-1, 3)
         out = set()
-        nd = self.need(conn.net, half)
-        nv = self.need(conn.net, via_half)
+        nd = np.array([self.need(conn.net, half), self.need(conn.net, half, breakout=True)])
+        nv = np.array([self.need(conn.net, via_half), self.need(conn.net, via_half, breakout=True)])
         pn = partner(conn.net)
         for k in sel:
             it = cu.items[k]
@@ -1185,11 +1195,13 @@ class Router:
             for L in range(NL):
                 if (it.layers >> L) & 1:
                     on |= P[:, 0] == L
-            if on.any() and (item_dist(it, P[on, 1], P[on, 2]) < nd[ci]).any():
-                out.add(it.conn)
-                continue
+            if on.any():
+                lim = nd[P[on, 3].astype(int), ci]
+                if (item_dist(it, P[on, 1], P[on, 2]) < lim).any():
+                    out.add(it.conn)
+                    continue
             if len(V):
-                hit = item_dist(it, V[:, 0], V[:, 1]) < nv[ci]
+                hit = item_dist(it, V[:, 0], V[:, 1]) < nv[V[:, 2].astype(int), ci]
                 if it.hole[2]:
                     hit |= np.hypot(V[:, 0] - it.hole[0], V[:, 1] - it.hole[1]) < \
                         it.hole[2] + VIA[1] / 2 + HOLE_TO_HOLE + MARGIN_MM
@@ -1278,7 +1290,7 @@ class Router:
         pts = [conn.ta, conn.tb] + ([target[0]] if target else [])
         w = self.window(pts, pad)
         reach = max(wl) / 2 + max(CLASSES) + VIA[0] + 0.1
-        obs, _, holes = self.fields(w, {conn.net}, partner(conn.net), reach)
+        obs, _, holes = self.fields(w, {conn.net}, partner(conn.net), reach, ripper=conn)
         fa = self.group_field(w, conn.a)
         fb = self.group_field(w, conn.b) if conn.b is not None else None
         if conn.b is None and target is None:            # plane pad: its plane's copper counts too
@@ -1521,7 +1533,7 @@ class Router:
             w = self.window([cp.ta, cp.tb, cn.ta, cn.tb], pad)
             half = h + wd / 2
             reach = half + max(CLASSES) + 0.1
-            obs, ownf, holes = self.fields(w, {"#none"}, None, reach)
+            obs, ownf, holes = self.fields(w, {"#none"}, None, reach, ripper=cp)
             # fat centre line: every other copper, the pair's own included, is an obstacle
             fixed, routed = self.free_maps(w, obs, net, half, margin=MARGIN_MM + 0.015)
             free0 = fixed[PL] if rip else fixed[PL] & routed[PL]
